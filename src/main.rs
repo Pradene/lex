@@ -1,8 +1,14 @@
 use std::fs;
+use std::process;
 
 pub struct Rule {
     pub pattern: String,
     pub action: String,
+}
+
+pub struct PendingPattern {
+    pub pattern: String,
+    pub line_number: usize,
 }
 
 fn main() {
@@ -12,9 +18,11 @@ fn main() {
     let lines: Vec<&str> = content.split('\n').collect();
 
     let mut rules: Vec<Rule> = Vec::new();
-    let mut current_patterns: Vec<String> = Vec::new();
+    let mut pending_patterns: Vec<PendingPattern> = Vec::new();
 
-    for (number, line) in lines.iter().enumerate() {
+    for (index, line) in lines.iter().enumerate() {
+        let line_number = index + 1;
+
         let line = line.trim();
         if line.is_empty() {
             continue;
@@ -27,27 +35,38 @@ fn main() {
 
             match action.as_str() {
                 "|" => {
-                    current_patterns.push(pattern);
+                    pending_patterns.push(PendingPattern {
+                        pattern,
+                        line_number,
+                    });
                 }
 
                 _ => {
-                    if !current_patterns.is_empty() {
-                        for pattern in &current_patterns {
+                    if !pending_patterns.is_empty() {
+                        for pending_pattern in &pending_patterns {
                             rules.push(Rule {
-                                pattern: pattern.clone(),
+                                pattern: pending_pattern.pattern.clone(),
                                 action: action.clone(),
                             })
                         }
 
-                        current_patterns.clear()
+                        pending_patterns.clear()
                     }
-                    
+
                     rules.push(Rule { pattern, action });
                 }
             }
         } else {
-            eprintln!("{}:{}", path, number);
+            eprintln!("Error: {}:{}", path, line_number);
         }
+    }
+
+    if !pending_patterns.is_empty() {
+        for pending_pattern in &pending_patterns {
+            eprintln!("Error: {}:{}", path, pending_pattern.line_number);
+        }
+
+        process::exit(1);
     }
 
     for rule in rules {
