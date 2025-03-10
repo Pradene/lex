@@ -1,5 +1,5 @@
+use std::env;
 use std::fs;
-use std::process;
 
 pub struct Rule {
     pub pattern: String,
@@ -11,9 +11,7 @@ pub struct PendingPattern {
     pub line_number: usize,
 }
 
-fn main() {
-    let path = "syntax/scanner.l";
-
+fn rules(path: &str) -> Result<Vec<Rule>, String> {
     let content = fs::read_to_string(path).expect("Should have been able to read the file");
     let lines: Vec<&str> = content.split('\n').collect();
 
@@ -44,8 +42,9 @@ fn main() {
                 _ => {
                     if !pending_patterns.is_empty() {
                         for pending_pattern in &pending_patterns {
+                            let pattern = &pending_pattern.pattern;
                             rules.push(Rule {
-                                pattern: pending_pattern.pattern.clone(),
+                                pattern: pattern.clone(),
                                 action: action.clone(),
                             })
                         }
@@ -62,15 +61,31 @@ fn main() {
     }
 
     if !pending_patterns.is_empty() {
-        for pending_pattern in &pending_patterns {
-            eprintln!("Error: {}:{}", path, pending_pattern.line_number);
-        }
-
-        process::exit(1);
+        let pattern = pending_patterns.get(0).unwrap();
+        return Err(format!("Error: {}:{}", path, pattern.line_number));
     }
+
+    Ok(rules)
+}
+
+fn main() -> Result<(), String> {
+    let args: Vec<String> = env::args().collect();
+    let default_lang = "c";
+
+    let language = args
+        .windows(2)
+        .find(|window| window[0] == "--language")
+        .map(|window| window[1].clone())
+        .unwrap_or_else(|| default_lang.to_string());
+
+    let path = "syntax/scanner.l";
+    let rules = rules(path)?;
 
     for rule in rules {
-        println!("pattern: {}", rule.pattern);
-        println!("action: {}", rule.action);
+        println!("{} - {}", rule.pattern, rule.action);
     }
+
+    println!("{}", language);
+
+    Ok(())
 }
