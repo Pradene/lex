@@ -6,7 +6,7 @@ use crate::RegexParser;
 use crate::State;
 use crate::Symbol;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NFA {
     pub states: BTreeSet<State>,
     pub alphabet: BTreeSet<char>,
@@ -53,6 +53,10 @@ impl Default for NFA {
 impl NFA {
     pub fn new(regex: String) -> Result<NFA, String> {
         RegexParser::parse(&regex)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        *self == NFA::empty()
     }
 
     fn add_state(&mut self) -> State {

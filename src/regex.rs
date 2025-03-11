@@ -38,8 +38,12 @@ impl RegexParser {
                     self.pos += 1; // Skip ')'
 
                     let op = self.parse_operators(inner)?;
-                    
-                    nfa = NFA::concat(nfa, op);
+
+                    nfa = if nfa.is_empty() {
+                        op
+                    } else {
+                        NFA::concat(nfa, op)
+                    };
                 }
                 '|' => {
                     self.pos += 1; // Skip '|'
@@ -51,7 +55,11 @@ impl RegexParser {
                     let class = self.parse_char_class()?;
                     let op = self.parse_operators(class)?;
 
-                    nfa = NFA::concat(nfa, op);
+                    nfa = if nfa.is_empty() {
+                        op
+                    } else {
+                        NFA::concat(nfa, op)
+                    };
                 }
                 '\\' => {
                     if self.pos + 1 >= self.chars.len() {
@@ -64,7 +72,11 @@ impl RegexParser {
 
                     let op = self.parse_operators(char_nfa)?;
 
-                    nfa = NFA::concat(nfa, op);
+                    nfa = if nfa.is_empty() {
+                        op
+                    } else {
+                        NFA::concat(nfa, op)
+                    };
                 }
                 c => {
                     if "()[].*+?|\\".contains(c) && c != '.' && c != '*' && c != '+' && c != '?' {
@@ -88,7 +100,11 @@ impl RegexParser {
 
                     let op = self.parse_operators(char_nfa)?;
 
-                    nfa = NFA::concat(nfa, op);
+                    nfa = if nfa.is_empty() {
+                        op
+                    } else {
+                        NFA::concat(nfa, op)
+                    };
                 }
             }
         }
