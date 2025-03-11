@@ -151,6 +151,7 @@ impl NFA {
 
     pub fn concat(first: NFA, second: NFA) -> NFA {
         let mut nfa = NFA::new();
+        
         let start = nfa.add_state();
         nfa.start_state = start;
 
@@ -209,10 +210,8 @@ impl NFA {
         let mut nfa = NFA::new();
 
         let start = nfa.add_state();
-        let end = nfa.add_state();
 
         nfa.start_state = start;
-        nfa.finite_states.insert(end);
 
         let mut first_map = BTreeMap::new();
         for &state in &first.states {
@@ -242,10 +241,10 @@ impl NFA {
         }
 
         for &finite in &first.finite_states {
-            nfa.add_transition(first_map[&finite], Symbol::Epsilon, end);
+            nfa.finite_states.insert(first_map[&finite]);
         }
         for &finite in &second.finite_states {
-            nfa.add_transition(second_map[&finite], Symbol::Epsilon, end);
+            nfa.finite_states.insert(second_map[&finite]);
         }
 
         for &c in &first.alphabet {
@@ -262,10 +261,7 @@ impl NFA {
         let mut nfa = NFA::new();
 
         let start = nfa.add_state();
-        let end = nfa.add_state();
-
         nfa.start_state = start;
-        nfa.finite_states.insert(end);
 
         let mut map = BTreeMap::new();
         for &state in &inner.states {
@@ -279,12 +275,10 @@ impl NFA {
             }
         }
 
-        nfa.add_transition(start, Symbol::Epsilon, end);
         nfa.add_transition(start, Symbol::Epsilon, map[&inner.start_state]);
 
         for &finite in &inner.finite_states {
             let mapped_finite = map[&finite];
-            nfa.add_transition(mapped_finite, Symbol::Epsilon, end);
             nfa.add_transition(mapped_finite, Symbol::Epsilon, map[&inner.start_state]);
         }
 

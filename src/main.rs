@@ -26,7 +26,7 @@ fn main() {
     let nfa2 = NFA::from_char('a');
     println!("{}", nfa2);
 
-    let nfa = NFA::concat(nfa1, nfa2);
+    let nfa = NFA::alternate(nfa1, nfa2);
     println!("{}", nfa);
     let star = NFA::kleene(nfa);
 
