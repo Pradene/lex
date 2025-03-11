@@ -1,91 +1,34 @@
-use std::env;
-use std::fs;
+use lex::nfa::NFA;
 
-pub struct Rule {
-    pub pattern: String,
-    pub action: String,
-}
+fn main() {
+    // let args: Vec<String> = env::args().collect();
+    // let default_lang = "c";
 
-pub struct PendingPattern {
-    pub pattern: String,
-    pub line_number: usize,
-}
+    // let language = args
+    //     .windows(2)
+    //     .find(|window| window[0] == "--language")
+    //     .map(|window| window[1].clone())
+    //     .unwrap_or_else(|| default_lang.to_string());
 
-fn rules(path: &str) -> Result<Vec<Rule>, String> {
-    let content = fs::read_to_string(path).expect("Should have been able to read the file");
-    let lines: Vec<&str> = content.split('\n').collect();
+    // let path = "syntax/scanner.l";
+    // let table = Table::new(path)?;
 
-    let mut rules: Vec<Rule> = Vec::new();
-    let mut pending_patterns: Vec<PendingPattern> = Vec::new();
+    // for rule in table.rules {
+    //     println!("{} - {}", rule.pattern, rule.action);
+    // }
 
-    for (index, line) in lines.iter().enumerate() {
-        let line_number = index + 1;
+    // println!("{}", language);
 
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
+    // Ok(())
 
-        let parts: Vec<&str> = line.splitn(2, ' ').collect();
-        if parts.len() == 2 {
-            let pattern = parts[0].trim().to_string();
-            let action = parts[1].trim().to_string();
+    let nfa1 = NFA::from_char('h');
+    println!("{}", nfa1);
+    let nfa2 = NFA::from_char('a');
+    println!("{}", nfa2);
 
-            match action.as_str() {
-                "|" => {
-                    pending_patterns.push(PendingPattern {
-                        pattern,
-                        line_number,
-                    });
-                }
+    let nfa = NFA::concat(nfa1, nfa2);
+    println!("{}", nfa);
+    let star = NFA::kleene(nfa);
 
-                _ => {
-                    if !pending_patterns.is_empty() {
-                        for pending_pattern in &pending_patterns {
-                            let pattern = &pending_pattern.pattern;
-                            rules.push(Rule {
-                                pattern: pattern.clone(),
-                                action: action.clone(),
-                            })
-                        }
-
-                        pending_patterns.clear()
-                    }
-
-                    rules.push(Rule { pattern, action });
-                }
-            }
-        } else {
-            eprintln!("Error: {}:{}", path, line_number);
-        }
-    }
-
-    if !pending_patterns.is_empty() {
-        let pattern = pending_patterns.get(0).unwrap();
-        return Err(format!("Error: {}:{}", path, pattern.line_number));
-    }
-
-    Ok(rules)
-}
-
-fn main() -> Result<(), String> {
-    let args: Vec<String> = env::args().collect();
-    let default_lang = "c";
-
-    let language = args
-        .windows(2)
-        .find(|window| window[0] == "--language")
-        .map(|window| window[1].clone())
-        .unwrap_or_else(|| default_lang.to_string());
-
-    let path = "syntax/scanner.l";
-    let rules = rules(path)?;
-
-    for rule in rules {
-        println!("{} - {}", rule.pattern, rule.action);
-    }
-
-    println!("{}", language);
-
-    Ok(())
+    println!("{}", star);
 }
