@@ -10,7 +10,7 @@ pub struct DFA {
     pub alphabet: BTreeSet<char>,
     pub transitions: BTreeMap<(State, Symbol), State>,
     pub start_state: State,
-    pub finite_states: BTreeSet<State>,
+    pub final_states: BTreeSet<State>,
 }
 
 impl DFA {
@@ -20,7 +20,7 @@ impl DFA {
             alphabet: BTreeSet::new(),
             transitions: BTreeMap::new(),
             start_state: 0,
-            finite_states: BTreeSet::new(),
+            final_states: BTreeSet::new(),
         }
     }
 }
@@ -36,7 +36,7 @@ impl Display for DFA {
 
         writeln!(f, "Start State: {:?}", self.start_state)?;
 
-        writeln!(f, "Finite States: {:?}", self.finite_states)?;
+        writeln!(f, "Finite States: {:?}", self.final_states)?;
 
         writeln!(f, "Transitions:")?;
         for ((state, symbol), next_state) in &self.transitions {
@@ -50,22 +50,19 @@ impl Display for DFA {
 impl From<NFA> for DFA {
     fn from(nfa: NFA) -> DFA {
         let mut dfa = DFA::new();
-        // Copy the NFA alphabet (note: it should not include epsilon)
-        dfa.alphabet = nfa.alphabet.clone();
+        dfa.alphabet.extend(nfa.alphabet.iter());
 
-        // Compute the epsilon closure of the NFA's start state.
-        let start_set: BTreeSet<State> = [nfa.start_state].iter().cloned().collect();
+        let start_set = [nfa.start_state].iter().cloned().collect();
         let start_closure = nfa.epsilon_closure(&start_set);
 
-        // Mapping from sets of NFA states to a DFA state.
-        let mut state_map: BTreeMap<BTreeSet<State>, State> = BTreeMap::new();
+        let mut state_map = BTreeMap::new();
         let mut dfa_state_counter = 0;
 
         state_map.insert(start_closure.clone(), dfa_state_counter);
         dfa.states.insert(dfa_state_counter);
         dfa.start_state = dfa_state_counter;
-        if start_closure.iter().any(|s| nfa.finite_states.contains(s)) {
-            dfa.finite_states.insert(dfa_state_counter);
+        if start_closure.iter().any(|s| nfa.final_states.contains(s)) {
+            dfa.final_states.insert(dfa_state_counter);
         }
 
         dfa_state_counter += 1;
@@ -73,20 +70,16 @@ impl From<NFA> for DFA {
         let mut queue = VecDeque::new();
         queue.push_back(start_closure);
 
-        // Process each set of NFA states (each representing one DFA state)
         while let Some(current_set) = queue.pop_front() {
             let current_dfa_state = state_map[&current_set];
 
             for &symbol in &dfa.alphabet {
-                // Compute all NFA states reachable by reading `symbol` from any state in `current_set`.
                 let move_set = nfa.move_on_symbol(&current_set, symbol);
-                // Then take the epsilon closure of those states.
                 let next_set = nfa.epsilon_closure(&move_set);
                 if next_set.is_empty() {
                     continue;
                 }
 
-                // If we haven't seen this set, add it as a new DFA state.
                 let target_state = if let Some(&state) = state_map.get(&next_set) {
                     state
                 } else {
@@ -94,14 +87,15 @@ impl From<NFA> for DFA {
                     dfa_state_counter += 1;
                     state_map.insert(next_set.clone(), new_state);
                     dfa.states.insert(new_state);
-                    if next_set.iter().any(|s| nfa.finite_states.contains(s)) {
-                        dfa.finite_states.insert(new_state);
+                    if next_set.iter().any(|s| nfa.final_states.contains(s)) {
+                        dfa.final_states.insert(new_state);
                     }
+                    
                     queue.push_back(next_set.clone());
+                    
                     new_state
                 };
 
-                // Record the deterministic transition.
                 dfa.transitions
                     .insert((current_dfa_state, Symbol::Char(symbol)), target_state);
             }
