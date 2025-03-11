@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::{Display, Formatter, Result};
+use std::default::Default;
+use std::fmt;
 
+use crate::RegexParser;
 use crate::State;
 use crate::Symbol;
 
@@ -13,8 +15,8 @@ pub struct NFA {
     pub final_states: BTreeSet<State>,
 }
 
-impl Display for NFA {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+impl fmt::Display for NFA {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "NFA Specification:")?;
 
         writeln!(f, "States: {:?}", self.states)?;
@@ -36,8 +38,8 @@ impl Display for NFA {
     }
 }
 
-impl NFA {
-    fn new() -> NFA {
+impl Default for NFA {
+    fn default() -> NFA {
         NFA {
             states: BTreeSet::new(),
             alphabet: BTreeSet::new(),
@@ -45,6 +47,12 @@ impl NFA {
             start_state: 0,
             final_states: BTreeSet::new(),
         }
+    }
+}
+
+impl NFA {
+    pub fn new(regex: String) -> Result<NFA, String> {
+        RegexParser::parse(&regex)
     }
 
     fn add_state(&mut self) -> State {
@@ -79,7 +87,7 @@ impl NFA {
     }
 
     pub fn empty() -> NFA {
-        let mut nfa = NFA::new();
+        let mut nfa = NFA::default();
         let start = nfa.add_state();
         let end = nfa.add_state();
 
@@ -91,7 +99,7 @@ impl NFA {
     }
 
     pub fn from_char(c: char) -> NFA {
-        let mut nfa = NFA::new();
+        let mut nfa = NFA::default();
         let start = nfa.add_state();
         let end = nfa.add_state();
 
@@ -103,7 +111,7 @@ impl NFA {
     }
 
     pub fn from_char_class(chars: BTreeSet<char>) -> NFA {
-        let mut nfa = NFA::new();
+        let mut nfa = NFA::default();
         let start = nfa.add_state();
         let end = nfa.add_state();
 
@@ -114,72 +122,55 @@ impl NFA {
         nfa
     }
 
-    pub fn from_char_range(start_char: char, end_char: char) -> NFA {
-        let mut chars = BTreeSet::new();
-
-        let start_code = start_char as u32;
-        let end_code = end_char as u32;
-
-        for code in start_code..=end_code {
-            if let Some(c) = char::from_u32(code) {
-                chars.insert(c);
-            }
-        }
-
-        Self::from_char_class(chars)
-    }
-
     pub fn concat(first: NFA, second: NFA) -> NFA {
-        let mut nfa = NFA::new();
-    
+        let mut nfa = NFA::default();
+
         let mut first_map = BTreeMap::new();
         for &state in &first.states {
             let new = nfa.add_state();
             first_map.insert(state, new);
         }
-    
+
         let mut second_map = BTreeMap::new();
         for &state in &second.states {
             let new = nfa.add_state();
             second_map.insert(state, new);
         }
-    
-        // Set the start state to be the start state of the first NFA.
+
         nfa.start_state = first_map[&first.start_state];
-        
-        // Copy transitions for the first NFA.
+
         for (&(from, ref symbol), to_states) in &first.transitions {
             for &to in to_states {
                 nfa.add_transition(first_map[&from], symbol.clone(), first_map[&to]);
             }
         }
-        
-        // Copy transitions for the second NFA.
+
         for (&(from, ref symbol), to_states) in &second.transitions {
             for &to in to_states {
                 nfa.add_transition(second_map[&from], symbol.clone(), second_map[&to]);
             }
         }
-        
-        // For each final state in the first NFA, add an epsilon transition to the start state of the second NFA.
+
         for &final_state in &first.final_states {
-            nfa.add_transition(first_map[&final_state], Symbol::Epsilon, second_map[&second.start_state]);
+            nfa.add_transition(
+                first_map[&final_state],
+                Symbol::Epsilon,
+                second_map[&second.start_state],
+            );
         }
-    
-        // The final states of the new NFA are the final states of the second NFA.
+
         for &final_state in &second.final_states {
             nfa.final_states.insert(second_map[&final_state]);
         }
-    
+
         nfa.alphabet.extend(first.alphabet.iter());
         nfa.alphabet.extend(second.alphabet.iter());
-    
+
         nfa
     }
-    
 
     pub fn union(first: NFA, second: NFA) -> NFA {
-        let mut nfa = NFA::new();
+        let mut nfa = NFA::default();
 
         let start = nfa.add_state();
         nfa.start_state = start;
@@ -228,7 +219,7 @@ impl NFA {
     }
 
     pub fn kleene(inner: NFA) -> NFA {
-        let mut nfa = NFA::new();
+        let mut nfa = NFA::default();
 
         let start = nfa.add_state();
         nfa.start_state = start;
@@ -268,7 +259,7 @@ impl NFA {
     }
 
     pub fn optional(inner: NFA) -> NFA {
-        let mut nfa = NFA::new();
+        let mut nfa = NFA::default();
 
         let start = nfa.add_state();
 

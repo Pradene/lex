@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::convert::From;
-use std::fmt::{Display, Formatter, Result};
+use std::fmt;
 
 use crate::{State, Symbol, NFA};
 
@@ -25,8 +25,8 @@ impl DFA {
     }
 }
 
-impl Display for DFA {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+impl fmt::Display for DFA {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "DFA Specification:")?;
 
         writeln!(f, "States: {:?}", self.states)?;
@@ -90,9 +90,9 @@ impl From<NFA> for DFA {
                     if next_set.iter().any(|s| nfa.final_states.contains(s)) {
                         dfa.final_states.insert(new_state);
                     }
-                    
+
                     queue.push_back(next_set.clone());
-                    
+
                     new_state
                 };
 
