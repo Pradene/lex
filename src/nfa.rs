@@ -1,48 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter, Result};
 
-type State = usize;
-
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum Symbol {
-    Epsilon,
-    Char(char),
-    CharClass(BTreeSet<char>),
-}
-
-impl Display for Symbol {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        match self {
-            Symbol::Epsilon => write!(f, "ε"),
-            Symbol::Char(c) => write!(f, "{}", c),
-            Symbol::CharClass(set) => {
-                write!(f, "[")?;
-                for c in set {
-                    write!(f, "{}", c)?;
-                }
-                write!(f, "]")
-            }
-        }
-    }
-}
-
-impl Symbol {
-    pub fn matches(&self, c: char) -> bool {
-        match self {
-            Symbol::Epsilon => false,
-            Symbol::Char(ch) => *ch == c,
-            Symbol::CharClass(set) => set.contains(&c),
-        }
-    }
-}
+use crate::State;
+use crate::Symbol;
 
 #[derive(Debug, Clone)]
 pub struct NFA {
-    states: BTreeSet<State>,
-    alphabet: BTreeSet<char>,
-    transitions: BTreeMap<(State, Symbol), BTreeSet<State>>,
-    start_state: State,
-    finite_states: BTreeSet<State>,
+    pub states: BTreeSet<State>,
+    pub alphabet: BTreeSet<char>,
+    pub transitions: BTreeMap<(State, Symbol), BTreeSet<State>>,
+    pub start_state: State,
+    pub finite_states: BTreeSet<State>,
 }
 
 impl Display for NFA {
@@ -110,6 +78,18 @@ impl NFA {
         }
     }
 
+    pub fn empty() -> NFA {
+        let mut nfa = NFA::new();
+        let start = nfa.add_state();
+        let end = nfa.add_state();
+
+        nfa.start_state = start;
+        nfa.finite_states.insert(end);
+        nfa.add_transition(start, Symbol::Epsilon, end);
+
+        nfa
+    }
+
     pub fn from_char(c: char) -> NFA {
         let mut nfa = NFA::new();
         let start = nfa.add_state();
@@ -151,15 +131,19 @@ impl NFA {
 
     pub fn concat(first: NFA, second: NFA) -> NFA {
         let mut nfa = NFA::new();
-    
+
         let mut first_map = BTreeMap::new();
         for &state in &first.states {
             let new_state = nfa.add_state();
             first_map.insert(state, new_state);
         }
-        
-        let merged_state = first_map[&*first.finite_states.iter().next().expect("No final state in first NFA")];
-    
+
+        let merged_state = first_map[&*first
+            .finite_states
+            .iter()
+            .next()
+            .expect("No final state in first NFA")];
+
         let mut second_map = BTreeMap::new();
         for &state in &second.states {
             if state == second.start_state {
@@ -169,31 +153,30 @@ impl NFA {
                 second_map.insert(state, new_state);
             }
         }
-    
+
         nfa.start_state = first_map[&first.start_state];
-    
+
         for (&(from, ref symbol), to_states) in &first.transitions {
             for &to in to_states {
                 nfa.add_transition(first_map[&from], symbol.clone(), first_map[&to]);
             }
         }
-    
+
         for (&(from, ref symbol), to_states) in &second.transitions {
             for &to in to_states {
                 nfa.add_transition(second_map[&from], symbol.clone(), second_map[&to]);
             }
         }
-    
+
         for &final_state in &second.finite_states {
             nfa.finite_states.insert(second_map[&final_state]);
         }
-    
+
         nfa.alphabet.extend(first.alphabet.iter());
         nfa.alphabet.extend(second.alphabet.iter());
-    
+
         nfa
     }
-    
 
     pub fn union(first: NFA, second: NFA) -> NFA {
         let mut nfa = NFA::new();
@@ -288,15 +271,15 @@ impl NFA {
         let mut nfa = NFA::new();
 
         let start = nfa.add_state();
-        
+
         nfa.start_state = start;
-        
+
         let mut map = BTreeMap::new();
         for &state in &inner.states {
             let new = nfa.add_state();
             map.insert(state, new);
         }
-        
+
         let end = nfa.add_state();
         nfa.finite_states.insert(end);
 
@@ -316,5 +299,34 @@ impl NFA {
         nfa.alphabet.extend(inner.alphabet.iter());
 
         nfa
+    }
+
+    pub fn epsilon_closure(&self, states: &BTreeSet<State>) -> BTreeSet<State> {
+        let mut closure = states.clone();
+        let mut stack: Vec<State> = states.iter().cloned().collect();
+
+        while let Some(state) = stack.pop() {
+            if let Some(next_states) = self.transitions.get(&(state, Symbol::Epsilon)) {
+                for &next in next_states {
+                    if closure.insert(next) {
+                        stack.push(next);
+                    }
+                }
+            }
+        }
+
+        closure
+    }
+
+    // Compute the set of states reachable from `states` via transitions labeled with the given symbol.
+    pub fn move_on_symbol(&self, states: &BTreeSet<State>, symbol: char) -> BTreeSet<State> {
+        let mut set = BTreeSet::new();
+        for &state in states {
+            if let Some(targets) = self.transitions.get(&(state, Symbol::Char(symbol))) {
+                set.extend(targets);
+            }
+        }
+
+        set
     }
 }

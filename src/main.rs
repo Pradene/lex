@@ -1,4 +1,4 @@
-use lex::nfa::NFA;
+use lex::{DFA, NFA};
 
 fn main() {
     // let args: Vec<String> = env::args().collect();
@@ -21,6 +21,9 @@ fn main() {
 
     // Ok(())
 
+    let em = NFA::empty();
+    println!("{}", em);
+
     let nfa1 = NFA::from_char('h');
     println!("{}", nfa1);
     let nfa2 = NFA::from_char('a');
@@ -29,15 +32,18 @@ fn main() {
     let un = NFA::union(nfa1.clone(), nfa2.clone());
     println!("{}", un);
 
-    let star = NFA::kleene(un);
+    let star = NFA::kleene(un.clone());
     println!("{}", star);
 
     let con = NFA::concat(nfa1.clone(), nfa2.clone());
     println!("{}", con);
 
     let con_plus = NFA::plus(con.clone());
-    println!("{}",con_plus);
+    println!("{}", con_plus);
 
     let con_opt = NFA::optional(con.clone());
     println!("{}", con_opt);
+
+    let dfa = DFA::from(star.clone());
+    println!("{}", dfa);
 }
