@@ -26,9 +26,18 @@ fn main() {
     let nfa2 = NFA::from_char('a');
     println!("{}", nfa2);
 
-    let nfa = NFA::alternate(nfa1, nfa2);
-    println!("{}", nfa);
-    let star = NFA::kleene(nfa);
+    let un = NFA::union(nfa1.clone(), nfa2.clone());
+    println!("{}", un);
 
+    let star = NFA::kleene(un);
     println!("{}", star);
+
+    let con = NFA::concat(nfa1.clone(), nfa2.clone());
+    println!("{}", con);
+
+    let con_plus = NFA::plus(con.clone());
+    println!("{}",con_plus);
+
+    let con_opt = NFA::optional(con.clone());
+    println!("{}", con_opt);
 }
