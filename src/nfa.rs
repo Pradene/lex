@@ -131,46 +131,52 @@ impl NFA {
 
     pub fn concat(first: NFA, second: NFA) -> NFA {
         let mut nfa = NFA::new();
-
+    
         let mut first_map = BTreeMap::new();
         for &state in &first.states {
             let new = nfa.add_state();
             first_map.insert(state, new);
         }
-
+    
         let mut second_map = BTreeMap::new();
         for &state in &second.states {
             let new = nfa.add_state();
             second_map.insert(state, new);
         }
-
+    
+        // Set the start state to be the start state of the first NFA.
         nfa.start_state = first_map[&first.start_state];
         
+        // Copy transitions for the first NFA.
         for (&(from, ref symbol), to_states) in &first.transitions {
             for &to in to_states {
                 nfa.add_transition(first_map[&from], symbol.clone(), first_map[&to]);
             }
         }
         
+        // Copy transitions for the second NFA.
         for (&(from, ref symbol), to_states) in &second.transitions {
             for &to in to_states {
                 nfa.add_transition(second_map[&from], symbol.clone(), second_map[&to]);
             }
         }
         
-        for &final_state in &second.final_states {
+        // For each final state in the first NFA, add an epsilon transition to the start state of the second NFA.
+        for &final_state in &first.final_states {
             nfa.add_transition(first_map[&final_state], Symbol::Epsilon, second_map[&second.start_state]);
         }
-
+    
+        // The final states of the new NFA are the final states of the second NFA.
         for &final_state in &second.final_states {
             nfa.final_states.insert(second_map[&final_state]);
         }
-
+    
         nfa.alphabet.extend(first.alphabet.iter());
         nfa.alphabet.extend(second.alphabet.iter());
-
+    
         nfa
     }
+    
 
     pub fn union(first: NFA, second: NFA) -> NFA {
         let mut nfa = NFA::new();

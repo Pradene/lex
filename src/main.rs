@@ -47,22 +47,32 @@ fn main() {
     // let dfa = DFA::from(star.clone());
     // println!("{}", dfa);
 
-    let n1 = NFA::from_char('1');
-    let n2 = NFA::from_char('2');
-    let n3 = NFA::concat(n1, n2);
-    println!("{}", n3);
+    // let n1 = NFA::from_char('1');
+    // let n2 = NFA::from_char('2');
+    // let n3 = NFA::concat(n1, n2);
+    // println!("{}", n3);
+
+    // let a = NFA::from_char('a');
+    // let b = NFA::from_char('b');
+
+    // let c = NFA::union(a.clone(), b.clone());
+    // let d = NFA::kleene(c);
+    // println!("{}", d);
+    // let e = NFA::concat(d, a.clone());
+    // let f = NFA::concat(e, b.clone());
+    // let g = NFA::concat(f, b.clone());
+    // println!("{}", g);
+
+    // let dfa = DFA::from(g);
+    // println!("{}", dfa);
 
     let a = NFA::from_char('a');
     let b = NFA::from_char('b');
+    let c = NFA::from_char('c');
 
-    let c = NFA::union(a.clone(), b.clone());
-    let d = NFA::kleene(c);
-    println!("{}", d);
-    let e = NFA::concat(d, a.clone());
-    let f = NFA::concat(e, b.clone());
-    let g = NFA::concat(f, b.clone());
-    println!("{}", g);
+    let n1 = NFA::union(b, c);
+    let n2 = NFA::kleene(n1);
+    let n3 = NFA::concat(a, n2);
 
-    let dfa = DFA::from(g);
-    println!("{}", dfa);
+    println!("{}", n3);
 }
