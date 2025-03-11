@@ -18,18 +18,16 @@ impl Display for NFA {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         writeln!(f, "NFA Specification:")?;
 
-        let sorted_states: Vec<_> = self.states.iter().collect();
-        writeln!(f, "States: {:?}", sorted_states)?;
+        writeln!(f, "States: {:?}", self.states)?;
 
-        let alphabet_str: String = self.alphabet.iter().collect();
-        writeln!(f, "Alphabet: {}", alphabet_str)?;
+        let alphabet: String = self.alphabet.iter().collect();
+        writeln!(f, "Alphabet: {}", alphabet)?;
 
         writeln!(f, "Start State: {:?}", self.start_state)?;
 
-        let sorted_finite: Vec<_> = self.finite_states.iter().collect();
-        writeln!(f, "Finite States: {:?}", sorted_finite)?;
+        writeln!(f, "Finite States: {:?}", self.finite_states)?;
 
-        writeln!(f, "\nTransitions:")?;
+        writeln!(f, "Transitions:")?;
         for ((state, symbol), next_states) in &self.transitions {
             let sorted_next: Vec<_> = next_states.iter().collect();
             writeln!(
