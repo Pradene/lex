@@ -1,6 +1,7 @@
+use lex::ParseError;
 use lex::NFA;
 
-fn main() -> Result<(), String> {
+fn main() -> Result<(), ParseError> {
     // let args: Vec<String> = env::args().collect();
     // let default_lang = "c";
 
@@ -19,7 +20,25 @@ fn main() -> Result<(), String> {
 
     // println!("{}", language);
 
-    let nfa = NFA::new(String::from("hello"))?;
+    let nfa = NFA::new(String::from("a"))?;
+    println!("{}", nfa);
+
+    let nfa = NFA::new(String::from("ab"))?;
+    println!("{}", nfa);
+
+    let nfa = NFA::new(String::from("ab?"))?;
+    println!("{}", nfa);
+
+    let nfa = NFA::new(String::from("ab*"))?;
+    println!("{}", nfa);
+
+    let nfa = NFA::new(String::from("([a-z]|[0-9])*"))?;
+    println!("{}", nfa);
+
+    let nfa = NFA::new(String::from("(((((ab)?)c*)v*)u+)*"))?;
+    println!("{}", nfa);
+
+    let nfa = NFA::new(String::from("[\\w]"))?;
     println!("{}", nfa);
 
     Ok(())

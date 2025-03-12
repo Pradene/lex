@@ -2,17 +2,18 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
 use std::fmt;
 
+use crate::ParseError;
 use crate::RegexParser;
-use crate::State;
+use crate::StateID;
 use crate::Symbol;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NFA {
-    pub states: BTreeSet<State>,
+    pub states: BTreeSet<StateID>,
     pub alphabet: BTreeSet<char>,
-    pub transitions: BTreeMap<(State, Symbol), BTreeSet<State>>,
-    pub start_state: State,
-    pub final_states: BTreeSet<State>,
+    pub transitions: BTreeMap<(StateID, Symbol), BTreeSet<StateID>>,
+    pub start_state: StateID,
+    pub final_states: BTreeSet<StateID>,
 }
 
 impl fmt::Display for NFA {
@@ -24,7 +25,7 @@ impl fmt::Display for NFA {
         let alphabet: String = self.alphabet.iter().collect();
         writeln!(f, "Alphabet: {}", alphabet)?;
 
-        writeln!(f, "Start State: {:?}", self.start_state)?;
+        writeln!(f, "Start StateID: {:?}", self.start_state)?;
 
         writeln!(f, "Finite States: {:?}", self.final_states)?;
 
@@ -51,15 +52,15 @@ impl Default for NFA {
 }
 
 impl NFA {
-    pub fn new(regex: String) -> Result<NFA, String> {
-        RegexParser::parse(&regex)
+    pub fn new(regex: String) -> Result<NFA, ParseError> {
+        RegexParser::new(&regex).parse()
     }
 
     pub fn is_empty(&self) -> bool {
         *self == NFA::empty()
     }
 
-    fn add_state(&mut self) -> State {
+    fn add_state(&mut self) -> StateID {
         let state = if self.states.is_empty() {
             0
         } else {
@@ -71,7 +72,7 @@ impl NFA {
         state
     }
 
-    fn add_transition(&mut self, from: State, symbol: Symbol, to: State) {
+    fn add_transition(&mut self, from: StateID, symbol: Symbol, to: StateID) {
         self.transitions
             .entry((from, symbol.clone()))
             .or_insert(BTreeSet::new())
@@ -102,7 +103,7 @@ impl NFA {
         nfa
     }
 
-    pub fn from_char(c: char) -> NFA {
+    pub fn char(c: char) -> NFA {
         let mut nfa = NFA::default();
         let start = nfa.add_state();
         let end = nfa.add_state();
@@ -114,7 +115,7 @@ impl NFA {
         nfa
     }
 
-    pub fn from_char_class(chars: BTreeSet<char>) -> NFA {
+    pub fn char_class(chars: BTreeSet<char>) -> NFA {
         let mut nfa = NFA::default();
         let start = nfa.add_state();
         let end = nfa.add_state();
@@ -124,6 +125,28 @@ impl NFA {
         nfa.add_transition(start, Symbol::CharClass(chars), end);
 
         nfa
+    }
+
+    pub fn char_class_negated(class: BTreeSet<char>) -> NFA {
+        let mut negated = BTreeSet::new();
+        for c in (0..128).map(|i| i as u8 as char) {
+            if !class.contains(&c) {
+                negated.insert(c);
+            }
+        }
+        NFA::char_class(negated)
+    }
+
+    pub fn concat_multiples(nfas: Vec<NFA>) -> NFA {
+        match nfas.len() {
+            0 => NFA::empty(),
+            1 => nfas.into_iter().next().unwrap(),
+            _ => {
+                let mut iter = nfas.into_iter();
+                let first = iter.next().unwrap();
+                iter.fold(first, |acc, nfa| NFA::concat(acc, nfa))
+            }
+        }
     }
 
     pub fn concat(first: NFA, second: NFA) -> NFA {
@@ -296,9 +319,18 @@ impl NFA {
         nfa
     }
 
-    pub fn epsilon_closure(&self, states: &BTreeSet<State>) -> BTreeSet<State> {
+    pub fn dot() -> NFA {
+        let mut chars = BTreeSet::new();
+        for c in 0..128u8 {
+            chars.insert(c as char);
+        }
+
+        NFA::char_class(chars)
+    }
+
+    pub fn epsilon_closure(&self, states: &BTreeSet<StateID>) -> BTreeSet<StateID> {
         let mut closure = states.clone();
-        let mut stack: Vec<State> = states.iter().cloned().collect();
+        let mut stack: Vec<StateID> = states.iter().cloned().collect();
 
         while let Some(state) = stack.pop() {
             if let Some(next_states) = self.transitions.get(&(state, Symbol::Epsilon)) {
@@ -313,8 +345,7 @@ impl NFA {
         closure
     }
 
-    // Compute the set of states reachable from `states` via transitions labeled with the given symbol.
-    pub fn move_on_symbol(&self, states: &BTreeSet<State>, symbol: char) -> BTreeSet<State> {
+    pub fn move_on_symbol(&self, states: &BTreeSet<StateID>, symbol: char) -> BTreeSet<StateID> {
         let mut set = BTreeSet::new();
         for &state in states {
             if let Some(targets) = self.transitions.get(&(state, Symbol::Char(symbol))) {

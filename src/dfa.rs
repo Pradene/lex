@@ -2,15 +2,15 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::convert::From;
 use std::fmt;
 
-use crate::{State, Symbol, NFA};
+use crate::{StateID, Symbol, NFA};
 
 #[derive(Debug, Clone)]
 pub struct DFA {
-    pub states: BTreeSet<State>,
+    pub states: BTreeSet<StateID>,
     pub alphabet: BTreeSet<char>,
-    pub transitions: BTreeMap<(State, Symbol), State>,
-    pub start_state: State,
-    pub final_states: BTreeSet<State>,
+    pub transitions: BTreeMap<(StateID, Symbol), StateID>,
+    pub start_state: StateID,
+    pub final_states: BTreeSet<StateID>,
 }
 
 impl DFA {
@@ -34,7 +34,7 @@ impl fmt::Display for DFA {
         let alphabet: String = self.alphabet.iter().collect();
         writeln!(f, "Alphabet: {}", alphabet)?;
 
-        writeln!(f, "Start State: {:?}", self.start_state)?;
+        writeln!(f, "Start StateID: {:?}", self.start_state)?;
 
         writeln!(f, "Finite States: {:?}", self.final_states)?;
 

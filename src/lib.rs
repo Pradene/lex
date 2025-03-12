@@ -10,4 +10,4 @@ pub use regex::*;
 pub use rule::*;
 pub use symbol::*;
 
-pub type State = usize;
+pub type StateID = usize;
