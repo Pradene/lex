@@ -1,45 +1,101 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
-use crate::NFA;
-
-#[derive(Debug)]
-pub enum ParseError {
-    UnexpectedEnd,
-    UnmatchedParenthesis { pos: usize },
-    UnterminatedClass,
-    InvalidRange { start: char, end: char },
-    InvalidEscape { pos: usize },
-    InvalidRepetition { min: usize, max: Option<usize> },
-    UnexpectedChar { pos: usize, char: char },
-    TrailingBackslash,
+pub enum Regex {
+    Char(char),
+    Union(Box<Regex>, Box<Regex>),
+    Concat(Box<Regex>, Box<Regex>),
+    Option(Box<Regex>),
+    Plus(Box<Regex>),
+    Kleene(Box<Regex>),
+    Bounded(Box<Regex>, usize, Option<usize>),
+    CharClass(BTreeSet<char>),
+    NegatedCharClass(BTreeSet<char>),
+    Dot,
 }
 
-impl fmt::Display for ParseError {
+impl fmt::Display for Regex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseError::UnexpectedEnd => write!(f, "Unexpected end of pattern"),
-            ParseError::UnmatchedParenthesis { pos } => {
-                write!(f, "Unmatched '(' at position {}", pos)
-            }
-            ParseError::UnterminatedClass => write!(f, "Unterminated character class"),
-            ParseError::InvalidRange { start, end } => {
-                write!(f, "Invalid range: {}-{}", start, end)
-            }
-            ParseError::InvalidEscape { pos } => {
-                write!(f, "Invalid escape sequence at position {}", pos)
-            }
-            ParseError::InvalidRepetition { min, max } => match max {
-                Some(max) => write!(f, "Invalid repetition: {{{},{}}}", min, max),
-                None => write!(f, "Invalid repetition: {{{}}}", min),
-            },
-            ParseError::UnexpectedChar { pos, char } => {
-                write!(f, "Unexpected character '{}' at position {}", char, pos)
-            }
-            ParseError::TrailingBackslash => write!(f, "Pattern ends with trailing backslash"),
-        }
+        self.fmt(f, 0)
     }
 }
+
+impl Regex {
+    pub fn new(regex: &str) -> Result<Regex, String> {
+        let mut parser = RegexParser::new(regex);
+
+        parser.parse()
+    }
+
+    fn fmt(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
+        // Helper to create indentation
+        let indent_str = " ".repeat(indent);
+
+        match self {
+            Regex::Char(c) => {
+                write!(f, "{}Char('{}')", indent_str, c)?;
+            }
+            Regex::CharClass(chars) => {
+                write!(f, "{}CharClass[", indent_str)?;
+                for c in chars {
+                    write!(f, "{}", c)?;
+                }
+                write!(f, "]")?;
+            }
+            Regex::NegatedCharClass(chars) => {
+                write!(f, "{}NegatedCharClass[^", indent_str)?;
+                for c in chars {
+                    write!(f, "{}", c)?;
+                }
+                write!(f, "]")?;
+            }
+            Regex::Dot => {
+                write!(f, "{}Dot", indent_str)?;
+            }
+            Regex::Bounded(inner, min, max) => {
+                let range = match max {
+                    Some(max) if min == max => format!("{}", min),
+                    Some(max) => format!("{}-{}", min, max),
+                    None => format!("{}+", min),
+                };
+                writeln!(f, "{}Bounded({}) {{", indent_str, range)?;
+                inner.fmt(f, indent + 2)?;
+                write!(f, "\n{}}}", indent_str)?;
+            }
+            Regex::Plus(inner) => {
+                writeln!(f, "{}Plus {{", indent_str)?;
+                inner.fmt(f, indent + 2)?;
+                write!(f, "\n{}}}", indent_str)?;
+            }
+            Regex::Kleene(inner) => {
+                writeln!(f, "{}Kleene {{", indent_str)?;
+                inner.fmt(f, indent + 2)?;
+                write!(f, "\n{}}}", indent_str)?;
+            }
+            Regex::Option(inner) => {
+                writeln!(f, "{}Option {{", indent_str)?;
+                inner.fmt(f, indent + 2)?;
+                write!(f, "\n{}}}", indent_str)?;
+            }
+            Regex::Union(left, right) => {
+                writeln!(f, "{}Union {{", indent_str)?;
+                left.fmt(f, indent + 2)?;
+                writeln!(f, ",")?;
+                right.fmt(f, indent + 2)?;
+                write!(f, "\n{}}}", indent_str)?;
+            }
+            Regex::Concat(left, right) => {
+                writeln!(f, "{}Concat {{", indent_str)?;
+                left.fmt(f, indent + 2)?;
+                writeln!(f, ",")?;
+                right.fmt(f, indent + 2)?;
+                write!(f, "\n{}}}", indent_str)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 
 pub struct RegexParser {
     chars: Vec<char>,
@@ -47,10 +103,10 @@ pub struct RegexParser {
 }
 
 impl RegexParser {
-    pub fn new(regex: &str) -> RegexParser {
+    fn new(regex: &str) -> RegexParser {
         RegexParser {
             chars: regex.chars().collect(),
-            pos: 0,
+            pos: 0
         }
     }
 
@@ -79,30 +135,29 @@ impl RegexParser {
         self.pos >= self.chars.len()
     }
 
-    pub fn parse(&mut self) -> Result<NFA, ParseError> {
-        let nfa = self.parse_union()?;
+    pub fn parse(&mut self) -> Result<Regex, String> {
+        let expr = self.parse_union()?;
         if !self.at_end() {
-            return Err(ParseError::UnexpectedChar {
-                pos: self.pos,
-                char: self.current_char().unwrap(),
-            });
+            return Err(format!(
+                "Unexpected char '{}' at {}",
+                self.current_char().unwrap(),
+                self.pos
+            ));
         }
-
-        Ok(nfa)
+        Ok(expr)
     }
 
-    fn parse_union(&mut self) -> Result<NFA, ParseError> {
-        let mut nfa = self.parse_concat()?;
+    fn parse_union(&mut self) -> Result<Regex, String> {
+        let mut left = self.parse_concat()?;
         while self.current_char() == Some('|') {
-            self.advance(); // skip '|'
+            self.advance();
             let right = self.parse_concat()?;
-            nfa = NFA::union(nfa, right);
+            left = Regex::Union(Box::new(left), Box::new(right));
         }
-
-        Ok(nfa)
+        Ok(left)
     }
 
-    fn parse_concat(&mut self) -> Result<NFA, ParseError> {
+    fn parse_concat(&mut self) -> Result<Regex, String> {
         let mut factors = Vec::new();
         while let Some(c) = self.current_char() {
             if c == ')' || c == '|' {
@@ -111,84 +166,127 @@ impl RegexParser {
             factors.push(self.parse_operator()?);
         }
 
-        Ok(NFA::concat_multiples(factors))
+        if factors.is_empty() {
+            Err("Empty concatenation".to_string())
+        } else {
+            let mut expr = factors.remove(0);
+            for factor in factors {
+                expr = Regex::Concat(Box::new(expr), Box::new(factor));
+            }
+            Ok(expr)
+        }
     }
 
-    fn parse_operator(&mut self) -> Result<NFA, ParseError> {
-        let mut nfa = self.parse_base()?;
+    fn parse_operator(&mut self) -> Result<Regex, String> {
+        let mut expr = self.parse_base()?;
 
         if let Some(c) = self.current_char() {
             match c {
                 '*' => {
                     self.advance();
-                    nfa = NFA::kleene(nfa);
+                    expr = Regex::Kleene(Box::new(expr));
                 }
                 '+' => {
                     self.advance();
-                    nfa = NFA::plus(nfa);
+                    expr = Regex::Plus(Box::new(expr));
                 }
                 '?' => {
                     self.advance();
-                    nfa = NFA::optional(nfa);
+                    expr = Regex::Option(Box::new(expr));
+                }
+                '{' => {
+                    expr = self.parse_bounded(expr)?;
                 }
                 _ => {}
             }
         }
 
-        Ok(nfa)
+        Ok(expr)
     }
 
-    fn parse_base(&mut self) -> Result<NFA, ParseError> {
+    fn parse_bounded(&mut self, expr: Regex) -> Result<Regex, String> {
+        if self.current_char() != Some('{') {
+            return Ok(expr);
+        }
+        self.advance();
+
+        let min = self.parse_number()?;
+        let mut max = None;
+
+        if self.current_char() == Some(',') {
+            self.advance();
+            if self.current_char() != Some('}') {
+                max = Some(self.parse_number()?);
+            }
+        } else {
+            max = Some(min);
+        }
+
+        if self.current_char() != Some('}') {
+            return Err(format!("Expected '}}' at position {}", self.pos));
+        }
+        self.advance();
+
+        Ok(Regex::Bounded(Box::new(expr), min, max))
+    }
+
+    fn parse_number(&mut self) -> Result<usize, String> {
+        let mut num = String::new();
+        while let Some(c) = self.current_char() {
+            if c.is_ascii_digit() {
+                num.push(c);
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        num.parse().map_err(|_| "Invalid number".to_string())
+    }
+
+    fn parse_base(&mut self) -> Result<Regex, String> {
         match self.current_char() {
             Some('(') => self.parse_group(),
             Some('[') => self.parse_char_class(),
             Some('.') => {
                 self.advance();
-                Ok(NFA::dot())
+                Ok(Regex::Dot)
             }
             Some('\\') => self.parse_escape(),
             Some(c) => {
                 self.advance();
-                Ok(NFA::char(c))
+                Ok(Regex::Char(c))
             }
-            None => Err(ParseError::UnexpectedEnd),
+            None => Err("Unexpected end of pattern".to_string()),
         }
     }
 
-    fn parse_group(&mut self) -> Result<NFA, ParseError> {
-        let start_pos = self.pos;
-        self.advance(); // skip '('
-
-        let _ = self.check_non_capturing_group();
-
-        let nfa = self.parse_union()?;
-
+    fn parse_group(&mut self) -> Result<Regex, String> {
+        self.advance(); // Skip '('
+        let _ = self.check_non_capturing_group(); // Ignore non-capturing for AST
+        let expr = self.parse_union()?;
         if self.current_char() != Some(')') {
-            return Err(ParseError::UnmatchedParenthesis { pos: start_pos });
+            return Err("Unmatched parenthesis".to_string());
         }
-
-        self.advance(); // skip ')'
-
-        Ok(nfa)
+        self.advance(); // Skip ')'
+        Ok(expr)
     }
 
     fn check_non_capturing_group(&mut self) -> bool {
         if self.current_char() == Some('?') && self.peek(1) == Some(':') {
-            self.pos += 2; // Skip '?:'
+            self.pos += 2;
             true
         } else {
             false
         }
     }
 
-    fn parse_char_class(&mut self) -> Result<NFA, ParseError> {
-        let mut class = BTreeSet::new();
-        let mut negate = false;
-
-        self.advance(); // skip '['
+    fn parse_char_class(&mut self) -> Result<Regex, String> {
+        self.advance(); // Skip '['
+        let mut chars = BTreeSet::new();
+        let mut negated = false;
 
         if self.current_char() == Some('^') {
-            negate = true;
+            negated = true;
             self.advance();
         }
 
@@ -197,39 +295,37 @@ impl RegexParser {
                 break;
             }
 
-            if self.peek(1) == Some('-') && self.peek(2).is_some() && self.peek(2) != Some(']') {
-                let start = c;
-                self.pos += 2; // Skip start and '-'
-                let end = self.consume_char().unwrap();
-
-                if start > end {
-                    return Err(ParseError::InvalidRange { start, end });
+            if c == '\\' {
+                self.advance();
+                self.parse_escape_in_class(&mut chars)?;
+            } else if let Some('-') = self.peek(1) {
+                if let Some(end) = self.peek(2) {
+                    if end != ']' {
+                        let start = c;
+                        self.advance(); // Skip start
+                        self.advance(); // Skip '-'
+                        let end = self.consume_char().unwrap();
+                        self.add_char_range(start, end, &mut chars)?;
+                        continue;
+                    }
                 }
-
-                self.add_char_range(start, end, &mut class)?;
-            } else if c == '\\' {
-                self.advance(); // Skip '\'
-                if self.at_end() {
-                    return Err(ParseError::TrailingBackslash);
-                }
-
-                self.parse_escape_in_class(&mut class)?;
+                chars.insert(c);
+                self.advance();
             } else {
-                class.insert(c);
+                chars.insert(c);
                 self.advance();
             }
         }
 
         if self.current_char() != Some(']') {
-            return Err(ParseError::UnterminatedClass);
+            return Err("Unclosed character class".to_string());
         }
+        self.advance();
 
-        self.advance(); // Skip ']'
-
-        Ok(if negate {
-            NFA::char_class_negated(class)
+        Ok(if negated {
+            Regex::NegatedCharClass(chars)
         } else {
-            NFA::char_class(class)
+            Regex::CharClass(chars)
         })
     }
 
@@ -237,134 +333,90 @@ impl RegexParser {
         &self,
         start: char,
         end: char,
-        class: &mut BTreeSet<char>,
-    ) -> Result<(), ParseError> {
-        let start_code = start as u32;
-        let end_code = end as u32;
-
-        for code in start_code..=end_code {
-            if let Some(c) = char::from_u32(code) {
-                class.insert(c);
-            }
+        chars: &mut BTreeSet<char>,
+    ) -> Result<(), String> {
+        if start > end {
+            return Err("Invalid character range".to_string());
         }
-
+        for c in start..=end {
+            chars.insert(c);
+        }
         Ok(())
     }
 
-    fn parse_escape_in_class(&mut self, class: &mut BTreeSet<char>) -> Result<(), ParseError> {
+    fn parse_escape_in_class(&mut self, chars: &mut BTreeSet<char>) -> Result<(), String> {
         match self.current_char() {
             Some('d') => {
+                ('0'..='9').for_each(|c| {
+                    chars.insert(c);
+                });
                 self.advance();
-                for c in '0'..='9' {
-                    class.insert(c);
-                }
             }
             Some('w') => {
+                ('a'..='z').chain('A'..='Z').chain('0'..='9').for_each(|c| {
+                    chars.insert(c);
+                });
+                chars.insert('_');
                 self.advance();
-                for c in 'a'..='z' {
-                    class.insert(c);
-                }
-                for c in 'A'..='Z' {
-                    class.insert(c);
-                }
-                for c in '0'..='9' {
-                    class.insert(c);
-                }
-                class.insert('_');
             }
             Some('s') => {
+                [' ', '\t', '\n', '\r'].iter().for_each(|&c| {
+                    chars.insert(c);
+                });
                 self.advance();
-                for c in [' ', '\t', '\n', '\r'] {
-                    class.insert(c);
-                }
             }
             Some(c) => {
+                chars.insert(c);
                 self.advance();
-                class.insert(c);
             }
-            None => return Err(ParseError::TrailingBackslash),
+            None => return Err("Escape at end of pattern".to_string()),
         }
-
         Ok(())
     }
 
-    fn parse_escape(&mut self) -> Result<NFA, ParseError> {
-        self.advance(); // skip '\\'
-        if self.at_end() {
-            return Err(ParseError::TrailingBackslash);
-        }
-
+    fn parse_escape(&mut self) -> Result<Regex, String> {
+        self.advance(); // Skip '\'
         match self.current_char() {
             Some('d') => {
                 self.advance();
-                let mut digits = BTreeSet::new();
-                for c in '0'..='9' {
-                    digits.insert(c);
-                }
-                Ok(NFA::char_class(digits))
+                Ok(Regex::CharClass(('0'..='9').collect()))
             }
             Some('D') => {
                 self.advance();
-                let mut non_digits = BTreeSet::new();
-                for c in (0..=127).map(|i| i as u8 as char) {
-                    if !('0'..='9').contains(&c) {
-                        non_digits.insert(c);
-                    }
-                }
-                Ok(NFA::char_class(non_digits))
+                let mut set: BTreeSet<char> = (0..=127).filter_map(|c| char::from_u32(c)).collect();
+                set.retain(|c| !c.is_ascii_digit());
+                Ok(Regex::NegatedCharClass(set))
             }
             Some('w') => {
                 self.advance();
-                let mut word_chars = BTreeSet::new();
-                for c in 'a'..='z' {
-                    word_chars.insert(c);
-                }
-                for c in 'A'..='Z' {
-                    word_chars.insert(c);
-                }
-                for c in '0'..='9' {
-                    word_chars.insert(c);
-                }
-                word_chars.insert('_');
-                Ok(NFA::char_class(word_chars))
+                let mut set: BTreeSet<char> =
+                    ('a'..='z').chain('A'..='Z').chain('0'..='9').collect();
+                set.insert('_');
+                Ok(Regex::CharClass(set))
             }
             Some('W') => {
                 self.advance();
-                let mut non_word_chars = BTreeSet::new();
-                for c in (0..=127).map(|i| i as u8 as char) {
-                    if !('a'..='z').contains(&c)
-                        && !('A'..='Z').contains(&c)
-                        && !('0'..='9').contains(&c)
-                        && c != '_'
-                    {
-                        non_word_chars.insert(c);
-                    }
-                }
-                Ok(NFA::char_class(non_word_chars))
+                let mut set: BTreeSet<char> = (0..=127).filter_map(|c| char::from_u32(c)).collect();
+                set.retain(|c| !c.is_alphanumeric() && *c != '_');
+                Ok(Regex::NegatedCharClass(set))
             }
             Some('s') => {
                 self.advance();
-                let mut whitespace = BTreeSet::new();
-                for c in [' ', '\t', '\n', '\r'] {
-                    whitespace.insert(c);
-                }
-                Ok(NFA::char_class(whitespace))
+                Ok(Regex::CharClass(
+                    [' ', '\t', '\n', '\r'].iter().cloned().collect(),
+                ))
             }
             Some('S') => {
                 self.advance();
-                let mut non_whitespace = BTreeSet::new();
-                for c in (0..=127).map(|i| i as u8 as char) {
-                    if ![' ', '\t', '\n', '\r'].contains(&c) {
-                        non_whitespace.insert(c);
-                    }
-                }
-                Ok(NFA::char_class(non_whitespace))
+                let mut set: BTreeSet<char> = (0..=127).filter_map(|c| char::from_u32(c)).collect();
+                set.retain(|c| ![' ', '\t', '\n', '\r'].contains(c));
+                Ok(Regex::NegatedCharClass(set))
             }
             Some(c) => {
                 self.advance();
-                Ok(NFA::char(c))
+                Ok(Regex::Char(c))
             }
-            None => Err(ParseError::TrailingBackslash),
+            None => Err("Escape at end of pattern".to_string()),
         }
     }
 }

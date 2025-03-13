@@ -1,7 +1,6 @@
-use lex::ParseError;
 use lex::NFA;
 
-fn main() -> Result<(), ParseError> {
+fn main() -> Result<(), String> {
     // let args: Vec<String> = env::args().collect();
     // let default_lang = "c";
 
@@ -20,26 +19,27 @@ fn main() -> Result<(), ParseError> {
 
     // println!("{}", language);
 
-    let nfa = NFA::new(String::from("a"))?;
-    println!("{}", nfa);
+    let expressions = vec![
+        String::from("a"),
+        String::from("ab"),
+        String::from("a|b"),
+        String::from("[0-9]"),
+        String::from("[a-zA-Z]"),
+        String::from("a+"),
+        String::from("(a*b)*"),
+        String::from("a?"),
+        String::from("[0-9]+"),
+        String::from("a{4}"),
+        String::from("a{0,2}"),
+        String::from("a{10,}"),
+        String::from("a{0,100000}"),
+        // String::from("(a{0,100000}){0,10000}"),
+    ];
 
-    let nfa = NFA::new(String::from("ab"))?;
-    println!("{}", nfa);
-
-    let nfa = NFA::new(String::from("ab?"))?;
-    println!("{}", nfa);
-
-    let nfa = NFA::new(String::from("ab*"))?;
-    println!("{}", nfa);
-
-    let nfa = NFA::new(String::from("([a-z]|[0-9])*"))?;
-    println!("{}", nfa);
-
-    let nfa = NFA::new(String::from("(((((ab)?)c*)v*)u+)*"))?;
-    println!("{}", nfa);
-
-    let nfa = NFA::new(String::from("[\\w]"))?;
-    println!("{}", nfa);
+    for expr in expressions {
+        let nfa = NFA::new(expr).unwrap();
+        println!("{}", nfa);
+    }
 
     Ok(())
 }

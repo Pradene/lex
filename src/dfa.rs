@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::convert::From;
+use std::default::Default;
 use std::fmt;
 
 use crate::{StateID, Symbol, NFA};
@@ -13,8 +14,8 @@ pub struct DFA {
     pub final_states: BTreeSet<StateID>,
 }
 
-impl DFA {
-    pub fn new() -> DFA {
+impl Default for DFA {
+    fn default() -> Self {
         DFA {
             states: BTreeSet::new(),
             alphabet: BTreeSet::new(),
@@ -22,6 +23,15 @@ impl DFA {
             start_state: 0,
             final_states: BTreeSet::new(),
         }
+    }
+}
+
+impl DFA {
+    pub fn new(regex: String) -> Result<DFA, String> {
+        let nfa = NFA::new(regex).unwrap();
+        let dfa = DFA::from(nfa);
+
+        Ok(dfa)
     }
 }
 
@@ -49,7 +59,7 @@ impl fmt::Display for DFA {
 
 impl From<NFA> for DFA {
     fn from(nfa: NFA) -> DFA {
-        let mut dfa = DFA::new();
+        let mut dfa = DFA::default();
         dfa.alphabet.extend(nfa.alphabet.iter());
 
         let start_set = [nfa.start_state].iter().cloned().collect();

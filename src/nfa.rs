@@ -2,8 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
 use std::fmt;
 
-use crate::ParseError;
-use crate::RegexParser;
+use crate::Regex;
 use crate::StateID;
 use crate::Symbol;
 
@@ -51,9 +50,31 @@ impl Default for NFA {
     }
 }
 
+impl From<Regex> for NFA {
+    fn from(regex: Regex) -> Self {
+        match regex {
+            Regex::Char(c) => NFA::char(c,),
+            Regex::CharClass(class) => NFA::char_class(class),
+            Regex::Dot => NFA::dot(),
+            Regex::Concat(left, right) => NFA::concat(NFA::from(*left), NFA::from(*right)),
+            Regex::Union(left, right) => NFA::union(NFA::from(*left), NFA::from(*right)),
+
+            Regex::Kleene(inner) => NFA::kleene(NFA::from(*inner)),
+            Regex::NegatedCharClass(class) => NFA::negated_char_class(class),
+            Regex::Option(inner) => NFA::optional(NFA::from(*inner)),
+            Regex::Plus(inner) => NFA::plus(NFA::from(*inner)),
+
+            Regex::Bounded(inner, min, max) => NFA::bounded(NFA::from(*inner), min, max),
+        }
+    }
+}
+
 impl NFA {
-    pub fn new(regex: String) -> Result<NFA, ParseError> {
-        RegexParser::new(&regex).parse()
+    pub fn new(regex: String) -> Result<NFA, String> {
+        let regex = Regex::new(&regex)?;
+        let nfa = NFA::from(regex);
+
+        Ok(nfa)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -127,7 +148,7 @@ impl NFA {
         nfa
     }
 
-    pub fn char_class_negated(class: BTreeSet<char>) -> NFA {
+    pub fn negated_char_class(class: BTreeSet<char>) -> NFA {
         let mut negated = BTreeSet::new();
         for c in (0..128).map(|i| i as u8 as char) {
             if !class.contains(&c) {
@@ -326,6 +347,30 @@ impl NFA {
         }
 
         NFA::char_class(chars)
+    }
+
+    pub fn bounded(inner: NFA, min: usize, max: Option<usize>) -> NFA {
+        if min == 0 && max.is_none() {
+            return NFA::kleene(inner);
+        }
+
+        let mut nfa = NFA::concat_multiples(vec![inner.clone(); min]);
+        
+        if let Some(max) = max {
+            let mut optional_parts = Vec::new();
+            for _ in min..max {
+                optional_parts.push(NFA::optional(inner.clone()));
+            }
+            
+            if !optional_parts.is_empty() {
+                nfa = NFA::concat_multiples(vec![nfa, NFA::concat_multiples(optional_parts)]);
+            }
+        } else {
+            let kleene = NFA::kleene(inner);
+            nfa = NFA::concat(nfa, kleene);
+        }
+
+        nfa
     }
 
     pub fn epsilon_closure(&self, states: &BTreeSet<StateID>) -> BTreeSet<StateID> {
