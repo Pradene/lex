@@ -1,4 +1,5 @@
 use lex::NFA;
+use lex::DFA;
 
 fn main() -> Result<(), String> {
     // let args: Vec<String> = env::args().collect();
@@ -32,13 +33,16 @@ fn main() -> Result<(), String> {
         String::from("a{4}"),
         String::from("a{0,2}"),
         String::from("a{10,}"),
-        String::from("a{0,100000}"),
+        // String::from("a{0,100000}"),
         // String::from("(a{0,100000}){0,10000}"),
     ];
 
     for expr in expressions {
-        let nfa = NFA::new(expr).unwrap();
+        let nfa = NFA::new(expr.clone()).unwrap();
         println!("{}", nfa);
+
+        let dfa = DFA::new(expr.clone()).unwrap();
+        println!("{}", dfa);
     }
 
     Ok(())

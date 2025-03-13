@@ -83,9 +83,31 @@ impl From<NFA> for DFA {
         while let Some(current_set) = queue.pop_front() {
             let current_dfa_state = state_map[&current_set];
 
+            // Process single character transitions
             for &symbol in &dfa.alphabet {
-                let move_set = nfa.move_on_symbol(&current_set, symbol);
-                let next_set = nfa.epsilon_closure(&move_set);
+                let mut next_set = BTreeSet::new();
+                
+                // Check all NFA states in current subset for transitions on this symbol
+                for &state in &current_set {
+                    // Check for Char transitions
+                    if let Some(targets) = nfa.transitions.get(&(state, Symbol::Char(symbol))) {
+                        next_set.extend(targets);
+                    }
+                    
+                    // Check for CharClass transitions
+                    for ((src_state, src_symbol), targets) in &nfa.transitions {
+                        if *src_state == state {
+                            if let Symbol::CharClass(char_set) = src_symbol {
+                                if char_set.contains(&symbol) {
+                                    next_set.extend(targets);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Apply epsilon closure to the resulting set
+                let next_set = nfa.epsilon_closure(&next_set);
                 if next_set.is_empty() {
                     continue;
                 }
