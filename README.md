@@ -9,3 +9,4 @@ This project is a lexer generator from syntax file written in rust. (Currently i
 [Thompson's construction](https://en.wikipedia.org/wiki/Thompson%27s_construction)  
 [Guide to Lex and Yacc](https://arcb.csc.ncsu.edu/~mueller/codeopt/codeopt00/y_man.pdf)
 [Regular Expression Matching using Bit Vector Automata](https://ohyoukillkenny.github.io/source/BVA.pdf)
+[NFA vs DFA](https://www.abstractsyntaxseed.com/blog/regex-engine/nfa-vs-dfa)

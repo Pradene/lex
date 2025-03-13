@@ -136,3 +136,29 @@ impl From<NFA> for DFA {
         dfa
     }
 }
+
+impl DFA {
+    pub fn simulate(&self, input: &str) -> bool {
+        let mut current_state = self.start_state;
+        
+        for c in input.chars() {
+            if !self.alphabet.contains(&c) {
+                return false; // Character not in alphabet
+            }
+            
+            match self.transitions.get(&(current_state, Symbol::Char(c))) {
+                Some(&next_state) => current_state = next_state,
+                None => return false, // No transition for this character
+            }
+        }
+        
+        self.final_states.contains(&current_state)
+    }
+
+    pub fn minimize(&self) -> DFA {
+        // Implementation of DFA minimization algorithm (Hopcroft's algorithm)
+        // This would reduce the number of states in the DFA
+
+        self.clone()
+    }
+}

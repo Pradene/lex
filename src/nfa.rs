@@ -217,6 +217,18 @@ impl NFA {
         nfa
     }
 
+    pub fn union_multiples(nfas: Vec<NFA>) -> NFA {
+        match nfas.len() {
+            0 => NFA::empty(),
+            1 => nfas.into_iter().next().unwrap(),
+            _ => {
+                let mut iter = nfas.into_iter();
+                let first = iter.next().unwrap();
+                iter.fold(first, |acc, nfa| NFA::union(acc, nfa))
+            }
+        }
+    }
+
     pub fn union(first: NFA, second: NFA) -> NFA {
         let mut nfa = NFA::default();
 
@@ -388,16 +400,5 @@ impl NFA {
         }
 
         closure
-    }
-
-    pub fn move_on_symbol(&self, states: &BTreeSet<StateID>, symbol: char) -> BTreeSet<StateID> {
-        let mut set = BTreeSet::new();
-        for &state in states {
-            if let Some(targets) = self.transitions.get(&(state, Symbol::Char(symbol))) {
-                set.extend(targets);
-            }
-        }
-
-        set
     }
 }

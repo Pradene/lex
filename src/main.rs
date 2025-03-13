@@ -18,32 +18,25 @@ fn main() -> Result<(), String> {
     //     println!("{} - {}", rule.pattern, rule.action);
     // }
 
-    // println!("{}", language);
+    let nfa_return = NFA::new(String::from("return"))?;
+    let nfa_int = NFA::new(String::from("int"))?;
+    let nfa_char = NFA::new(String::from("char"))?;
+    let nfa_while = NFA::new(String::from("while"))?;
 
-    let expressions = vec![
-        String::from("a"),
-        String::from("ab"),
-        String::from("a|b"),
-        String::from("[0-9]"),
-        String::from("[a-zA-Z]"),
-        String::from("a+"),
-        String::from("(a*b)*"),
-        String::from("a?"),
-        String::from("[0-9]+"),
-        String::from("a{4}"),
-        String::from("a{0,2}"),
-        String::from("a{10,}"),
-        // String::from("a{0,100000}"),
-        // String::from("(a{0,100000}){0,10000}"),
-    ];
+    let nfa = NFA::union_multiples(vec![
+        nfa_return,
+        nfa_int,
+        nfa_char,
+        nfa_while,
+    ]);
 
-    for expr in expressions {
-        let nfa = NFA::new(expr.clone()).unwrap();
-        println!("{}", nfa);
+    let dfa = DFA::from(nfa);
+    println!("{}", dfa);
 
-        let dfa = DFA::new(expr.clone()).unwrap();
-        println!("{}", dfa);
-    }
+    println!("{}", dfa.simulate("int"));
+    println!("{}", dfa.simulate("return"));
+    println!("{}", dfa.simulate("cha"));
+    println!("{}", dfa.simulate("char"));
 
     Ok(())
 }
