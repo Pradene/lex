@@ -23,13 +23,3 @@ impl Display for Symbol {
         }
     }
 }
-
-impl Symbol {
-    pub fn matches(&self, c: char) -> bool {
-        match self {
-            Symbol::Epsilon => false,
-            Symbol::Char(ch) => *ch == c,
-            Symbol::CharClass(set) => set.contains(&c),
-        }
-    }
-}

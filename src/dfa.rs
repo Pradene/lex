@@ -3,7 +3,7 @@ use std::convert::From;
 use std::default::Default;
 use std::fmt;
 
-use crate::{StateID, Symbol, NFA};
+use crate::{Action, StateID, Symbol, NFA};
 
 #[derive(Debug, Clone)]
 pub struct DFA {
@@ -12,6 +12,7 @@ pub struct DFA {
     pub transitions: BTreeMap<(StateID, Symbol), StateID>,
     pub start_state: StateID,
     pub final_states: BTreeSet<StateID>,
+    pub actions: BTreeMap<StateID, Action>,
 }
 
 impl Default for DFA {
@@ -22,13 +23,14 @@ impl Default for DFA {
             transitions: BTreeMap::new(),
             start_state: 0,
             final_states: BTreeSet::new(),
+            actions: BTreeMap::new(),
         }
     }
 }
 
 impl DFA {
-    pub fn new(regex: String) -> Result<DFA, String> {
-        let nfa = NFA::new(regex).unwrap();
+    pub fn new(regex: String, action: String) -> Result<DFA, String> {
+        let nfa = NFA::new(regex, action)?;
         let dfa = DFA::from(nfa);
 
         Ok(dfa)
@@ -53,6 +55,11 @@ impl fmt::Display for DFA {
             writeln!(f, "  δ({:?}, {}) = {:?}", state, symbol, next_state)?;
         }
 
+        writeln!(f, "Actions:")?;
+        for (state, action) in &self.actions {
+            writeln!(f, "  {:?} ->  {}", state, action)?;
+        }
+
         Ok(())
     }
 }
@@ -62,74 +69,69 @@ impl From<NFA> for DFA {
         let mut dfa = DFA::default();
         dfa.alphabet.extend(nfa.alphabet.iter());
 
-        let start_set = [nfa.start_state].iter().cloned().collect();
-        let start_closure = nfa.epsilon_closure(&start_set);
-
-        let mut state_map = BTreeMap::new();
+        let start_set = nfa.epsilon_closure(&BTreeSet::from([nfa.start_state]));
+        let mut state_map = BTreeMap::new(); // Maps NFA state subsets to DFA StateIDs
         let mut dfa_state_counter = 0;
 
-        state_map.insert(start_closure.clone(), dfa_state_counter);
+        state_map.insert(start_set.clone(), dfa_state_counter);
         dfa.states.insert(dfa_state_counter);
         dfa.start_state = dfa_state_counter;
-        if start_closure.iter().any(|s| nfa.final_states.contains(s)) {
-            dfa.final_states.insert(dfa_state_counter);
-        }
 
         dfa_state_counter += 1;
-
         let mut queue = VecDeque::new();
-        queue.push_back(start_closure);
+        queue.push_back(start_set);
 
-        while let Some(current_set) = queue.pop_front() {
-            let current_dfa_state = state_map[&current_set];
+        while let Some(current_nfa_states) = queue.pop_front() {
+            let current_dfa_state = state_map[&current_nfa_states];
 
-            // Process single character transitions
             for &symbol in &dfa.alphabet {
-                let mut next_set = BTreeSet::new();
-                
-                // Check all NFA states in current subset for transitions on this symbol
-                for &state in &current_set {
-                    // Check for Char transitions
-                    if let Some(targets) = nfa.transitions.get(&(state, Symbol::Char(symbol))) {
-                        next_set.extend(targets);
+                let mut next_nfa_states = BTreeSet::new();
+
+                for &nfa_state in &current_nfa_states {
+                    if let Some(targets) = nfa.transitions.get(&(nfa_state, Symbol::Char(symbol))) {
+                        next_nfa_states.extend(targets);
                     }
-                    
-                    // Check for CharClass transitions
-                    for ((src_state, src_symbol), targets) in &nfa.transitions {
-                        if *src_state == state {
-                            if let Symbol::CharClass(char_set) = src_symbol {
+                    for ((src, sym), targets) in &nfa.transitions {
+                        if *src == nfa_state {
+                            if let Symbol::CharClass(char_set) = sym {
                                 if char_set.contains(&symbol) {
-                                    next_set.extend(targets);
+                                    next_nfa_states.extend(targets);
                                 }
                             }
                         }
                     }
                 }
-                
-                // Apply epsilon closure to the resulting set
-                let next_set = nfa.epsilon_closure(&next_set);
-                if next_set.is_empty() {
-                    continue;
+
+                let next_nfa_states = nfa.epsilon_closure(&next_nfa_states);
+                if next_nfa_states.is_empty() {
+                    continue; // Dead state
                 }
 
-                let target_state = if let Some(&state) = state_map.get(&next_set) {
-                    state
-                } else {
-                    let new_state = dfa_state_counter;
-                    dfa_state_counter += 1;
-                    state_map.insert(next_set.clone(), new_state);
-                    dfa.states.insert(new_state);
-                    if next_set.iter().any(|s| nfa.final_states.contains(s)) {
-                        dfa.final_states.insert(new_state);
+                let target_dfa_state = match state_map.get(&next_nfa_states) {
+                    Some(&id) => id,
+                    None => {
+                        let new_id = dfa_state_counter;
+                        dfa_state_counter += 1;
+                        state_map.insert(next_nfa_states.clone(), new_id);
+                        dfa.states.insert(new_id);
+
+                        for &nfa_state in &next_nfa_states {
+                            if nfa.final_states.contains(&nfa_state) {
+                                println!("{}", nfa_state);
+                                if let Some(action) = nfa.actions.get(&nfa_state) {
+                                    dfa.final_states.insert(new_id);
+                                    dfa.actions.insert(new_id, action.clone());
+                                }
+                            }
+                        }
+
+                        queue.push_back(next_nfa_states.clone());
+                        new_id
                     }
-
-                    queue.push_back(next_set.clone());
-
-                    new_state
                 };
 
                 dfa.transitions
-                    .insert((current_dfa_state, Symbol::Char(symbol)), target_state);
+                    .insert((current_dfa_state, Symbol::Char(symbol)), target_dfa_state);
             }
         }
 
@@ -138,21 +140,24 @@ impl From<NFA> for DFA {
 }
 
 impl DFA {
-    pub fn simulate(&self, input: &str) -> bool {
+    pub fn simulate(&self, input: &str) -> Option<Action> {
         let mut current_state = self.start_state;
-        
+
         for c in input.chars() {
             if !self.alphabet.contains(&c) {
-                return false; // Character not in alphabet
+                return None;
             }
-            
+
             match self.transitions.get(&(current_state, Symbol::Char(c))) {
                 Some(&next_state) => current_state = next_state,
-                None => return false, // No transition for this character
+                None => return None,
             }
         }
-        
-        self.final_states.contains(&current_state)
+
+        match self.actions.get(&current_state) {
+            Some(action) => Some(action.clone()),
+            None => None,
+        }
     }
 
     pub fn minimize(&self) -> DFA {

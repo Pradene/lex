@@ -1,42 +1,49 @@
-use lex::NFA;
+use lex::Table;
 use lex::DFA;
+use lex::NFA;
+
+use std::env;
 
 fn main() -> Result<(), String> {
-    // let args: Vec<String> = env::args().collect();
-    // let default_lang = "c";
+    let args: Vec<String> = env::args().collect();
 
-    // let language = args
-    //     .windows(2)
-    //     .find(|window| window[0] == "--language")
-    //     .map(|window| window[1].clone())
-    //     .unwrap_or_else(|| default_lang.to_string());
+    let _language = args
+        .windows(2)
+        .find(|window| window[0] == "--language")
+        .map(|window| window[1].clone())
+        .unwrap_or_else(|| "c".to_string());
 
-    // let path = "syntax/scanner.l";
-    // let table = Table::new(path)?;
+    let path = "syntax/scanner.l";
+    let table = Table::new(path)?;
 
-    // for rule in table.rules {
-    //     println!("{} - {}", rule.pattern, rule.action);
-    // }
+    let mut nfa = NFA::empty();
 
-    let nfa_return = NFA::new(String::from("return"))?;
-    let nfa_int = NFA::new(String::from("int"))?;
-    let nfa_char = NFA::new(String::from("char"))?;
-    let nfa_while = NFA::new(String::from("while"))?;
+    for rule in table.rules {
+        let regex = NFA::new(rule.pattern, rule.action)?;
+        nfa = NFA::union(nfa, regex);
+    }
 
-    let nfa = NFA::union_multiples(vec![
-        nfa_return,
-        nfa_int,
-        nfa_char,
-        nfa_while,
-    ]);
+    println!("{}", nfa);
 
     let dfa = DFA::from(nfa);
-    println!("{}", dfa);
 
-    println!("{}", dfa.simulate("int"));
-    println!("{}", dfa.simulate("return"));
-    println!("{}", dfa.simulate("cha"));
-    println!("{}", dfa.simulate("char"));
+    let tests = vec![
+        String::from(""),
+        String::from("0"),
+        String::from("bonjour0"),
+        String::from("bonjour"),
+        String::from("int"),
+        String::from("cha_"),
+    ];
+
+    for test in &tests {
+        let action = dfa.simulate(test);
+
+        match action {
+            Some(action) => println!("matched: {}", action),
+            None => println!("not matched"),
+        }
+    }
 
     Ok(())
 }

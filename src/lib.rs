@@ -11,3 +11,4 @@ pub use rule::*;
 pub use symbol::*;
 
 pub type StateID = usize;
+pub type Action = String;

@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
 use std::fmt;
 
+use crate::Action;
 use crate::Regex;
 use crate::StateID;
 use crate::Symbol;
@@ -13,6 +14,7 @@ pub struct NFA {
     pub transitions: BTreeMap<(StateID, Symbol), BTreeSet<StateID>>,
     pub start_state: StateID,
     pub final_states: BTreeSet<StateID>,
+    pub actions: BTreeMap<StateID, Action>,
 }
 
 impl fmt::Display for NFA {
@@ -34,6 +36,11 @@ impl fmt::Display for NFA {
             writeln!(f, "  δ({:?}, {}) = {:?}", state, symbol, sorted_next)?;
         }
 
+        writeln!(f, "Actions:")?;
+        for (state, action) in &self.actions {
+            writeln!(f, "  {:?} ->  {}", state, action)?;
+        }
+
         Ok(())
     }
 }
@@ -46,14 +53,15 @@ impl Default for NFA {
             transitions: BTreeMap::new(),
             start_state: 0,
             final_states: BTreeSet::new(),
+            actions: BTreeMap::new(),
         }
     }
 }
 
 impl From<Regex> for NFA {
-    fn from(regex: Regex) -> Self {
+    fn from(regex: Regex) -> NFA {
         match regex {
-            Regex::Char(c) => NFA::char(c,),
+            Regex::Char(c) => NFA::char(c),
             Regex::CharClass(class) => NFA::char_class(class),
             Regex::Dot => NFA::dot(),
             Regex::Concat(left, right) => NFA::concat(NFA::from(*left), NFA::from(*right)),
@@ -70,9 +78,13 @@ impl From<Regex> for NFA {
 }
 
 impl NFA {
-    pub fn new(regex: String) -> Result<NFA, String> {
+    pub fn new(regex: String, action: String) -> Result<NFA, String> {
         let regex = Regex::new(&regex)?;
-        let nfa = NFA::from(regex);
+        let mut nfa = NFA::from(regex);
+
+        for state in nfa.final_states.clone() {
+            nfa.add_action(state, action.clone());
+        }
 
         Ok(nfa)
     }
@@ -91,6 +103,10 @@ impl NFA {
         self.states.insert(state);
 
         state
+    }
+
+    fn add_action(&mut self, state: StateID, action: Action) {
+        self.actions.insert(state, action);
     }
 
     fn add_transition(&mut self, from: StateID, symbol: Symbol, to: StateID) {
@@ -155,6 +171,7 @@ impl NFA {
                 negated.insert(c);
             }
         }
+
         NFA::char_class(negated)
     }
 
@@ -175,27 +192,33 @@ impl NFA {
 
         let mut first_map = BTreeMap::new();
         for &state in &first.states {
-            let new = nfa.add_state();
-            first_map.insert(state, new);
+            let new_state = nfa.add_state();
+            first_map.insert(state, new_state);
+            if let Some(action) = first.actions.get(&state) {
+                nfa.actions.insert(new_state, action.clone());
+            }
         }
 
         let mut second_map = BTreeMap::new();
         for &state in &second.states {
-            let new = nfa.add_state();
-            second_map.insert(state, new);
+            let new_state = nfa.add_state();
+            second_map.insert(state, new_state);
+            if let Some(action) = second.actions.get(&state) {
+                nfa.actions.insert(new_state, action.clone());
+            }
         }
 
         nfa.start_state = first_map[&first.start_state];
 
-        for (&(from, ref symbol), to_states) in &first.transitions {
+        for ((from, symbol), to_states) in &first.transitions {
             for &to in to_states {
-                nfa.add_transition(first_map[&from], symbol.clone(), first_map[&to]);
+                nfa.add_transition(first_map[from], symbol.clone(), first_map[&to]);
             }
         }
 
-        for (&(from, ref symbol), to_states) in &second.transitions {
+        for ((from, symbol), to_states) in &second.transitions {
             for &to in to_states {
-                nfa.add_transition(second_map[&from], symbol.clone(), second_map[&to]);
+                nfa.add_transition(second_map[from], symbol.clone(), second_map[&to]);
             }
         }
 
@@ -209,6 +232,9 @@ impl NFA {
 
         for &final_state in &second.final_states {
             nfa.final_states.insert(second_map[&final_state]);
+            if let Some(action) = second.actions.get(&final_state) {
+                nfa.actions.insert(second_map[&final_state], action.clone());
+            }
         }
 
         nfa.alphabet.extend(first.alphabet.iter());
@@ -231,45 +257,46 @@ impl NFA {
 
     pub fn union(first: NFA, second: NFA) -> NFA {
         let mut nfa = NFA::default();
-
         let start = nfa.add_state();
         nfa.start_state = start;
 
         let mut first_map = BTreeMap::new();
         for &state in &first.states {
-            let new = nfa.add_state();
-            first_map.insert(state, new);
+            let new_state = nfa.add_state();
+            first_map.insert(state, new_state);
+            if let Some(action) = first.actions.get(&state) {
+                nfa.actions.insert(new_state, action.clone());
+            }
         }
 
         let mut second_map = BTreeMap::new();
         for &state in &second.states {
-            let new = nfa.add_state();
-            second_map.insert(state, new);
+            let new_state = nfa.add_state();
+            second_map.insert(state, new_state);
+            if let Some(action) = second.actions.get(&state) {
+                nfa.actions.insert(new_state, action.clone());
+            }
         }
 
         nfa.add_transition(start, Symbol::Epsilon, first_map[&first.start_state]);
         nfa.add_transition(start, Symbol::Epsilon, second_map[&second.start_state]);
 
-        for (&(from, ref symbol), to_states) in &first.transitions {
+        for ((from, symbol), to_states) in &first.transitions {
             for &to in to_states {
-                nfa.add_transition(first_map[&from], symbol.clone(), first_map[&to]);
+                nfa.add_transition(first_map[from], symbol.clone(), first_map[&to]);
+            }
+        }
+        for ((from, symbol), to_states) in &second.transitions {
+            for &to in to_states {
+                nfa.add_transition(second_map[from], symbol.clone(), second_map[&to]);
             }
         }
 
-        for (&(from, ref symbol), to_states) in &second.transitions {
-            for &to in to_states {
-                nfa.add_transition(second_map[&from], symbol.clone(), second_map[&to]);
-            }
+        for &final_state in &first.final_states {
+            nfa.final_states.insert(first_map[&final_state]);
         }
-
-        let end = nfa.add_state();
-        nfa.final_states.insert(end);
-
-        for &finite in &first.final_states {
-            nfa.add_transition(first_map[&finite], Symbol::Epsilon, end);
-        }
-        for &finite in &second.final_states {
-            nfa.add_transition(second_map[&finite], Symbol::Epsilon, end);
+        for &final_state in &second.final_states {
+            nfa.final_states.insert(second_map[&final_state]);
         }
 
         nfa.alphabet.extend(first.alphabet.iter());
@@ -367,13 +394,13 @@ impl NFA {
         }
 
         let mut nfa = NFA::concat_multiples(vec![inner.clone(); min]);
-        
+
         if let Some(max) = max {
             let mut optional_parts = Vec::new();
             for _ in min..max {
                 optional_parts.push(NFA::optional(inner.clone()));
             }
-            
+
             if !optional_parts.is_empty() {
                 nfa = NFA::concat_multiples(vec![nfa, NFA::concat_multiples(optional_parts)]);
             }

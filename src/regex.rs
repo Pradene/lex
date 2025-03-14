@@ -96,7 +96,6 @@ impl Regex {
     }
 }
 
-
 pub struct RegexParser {
     chars: Vec<char>,
     pos: usize,
@@ -106,7 +105,7 @@ impl RegexParser {
     fn new(regex: &str) -> RegexParser {
         RegexParser {
             chars: regex.chars().collect(),
-            pos: 0
+            pos: 0,
         }
     }
 
