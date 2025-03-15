@@ -104,7 +104,7 @@ impl From<NFA> for DFA {
 
                 let next_nfa_states = nfa.epsilon_closure(&next_nfa_states);
                 if next_nfa_states.is_empty() {
-                    continue; // Dead state
+                    continue;
                 }
 
                 let target_dfa_state = match state_map.get(&next_nfa_states) {
@@ -115,13 +115,19 @@ impl From<NFA> for DFA {
                         state_map.insert(next_nfa_states.clone(), new_id);
                         dfa.states.insert(new_id);
 
+                        let mut highest_priority_state: Option<StateID> = None;
                         for &nfa_state in &next_nfa_states {
                             if nfa.final_states.contains(&nfa_state) {
-                                println!("{}", nfa_state);
-                                if let Some(action) = nfa.actions.get(&nfa_state) {
-                                    dfa.final_states.insert(new_id);
-                                    dfa.actions.insert(new_id, action.clone());
+                                if highest_priority_state.is_none() || nfa_state < highest_priority_state.unwrap() {
+                                    highest_priority_state = Some(nfa_state);
                                 }
+                            }
+                        }
+
+                        if let Some(state) = highest_priority_state {
+                            if let Some(action) = nfa.actions.get(&state) {
+                                dfa.final_states.insert(new_id);
+                                dfa.actions.insert(new_id, action.clone());
                             }
                         }
 
@@ -140,23 +146,60 @@ impl From<NFA> for DFA {
 }
 
 impl DFA {
-    pub fn simulate(&self, input: &str) -> Option<Action> {
-        let mut current_state = self.start_state;
-
-        for c in input.chars() {
-            if !self.alphabet.contains(&c) {
-                return None;
+    pub fn simulate(&self, input: &str) -> Vec<(String, Action)> {
+        let mut tokens = Vec::new();
+        let mut remaining = input.to_string();
+        
+        while !remaining.is_empty() {
+            if let Some(pos) = remaining.find(|c: char| !c.is_whitespace()) {
+                remaining = remaining[pos..].to_string();
+            } else {
+                break;
             }
-
+            
+            let (token, action, rest) = self.scan_next_token(&remaining);
+            if token.is_empty() {
+                break;
+            }
+            
+            tokens.push((token, action));
+            remaining = rest;
+        }
+        
+        tokens
+    }
+    
+    fn scan_next_token(&self, input: &str) -> (String, Action, String) {
+        let mut current_state = self.start_state;
+        let mut last_accepting_state = None;
+        let mut last_accepting_length = 0;
+        
+        let chars: Vec<char> = input.chars().collect();
+        for (i, &c) in chars.iter().enumerate() {
+            if !self.alphabet.contains(&c) {
+                break;
+            }
+            
             match self.transitions.get(&(current_state, Symbol::Char(c))) {
-                Some(&next_state) => current_state = next_state,
-                None => return None,
+                Some(&next_state) => {
+                    current_state = next_state;
+                    if self.final_states.contains(&current_state) {
+                        last_accepting_state = Some(current_state);
+                        last_accepting_length = i + 1;
+                    }
+                }
+                None => break,
             }
         }
-
-        match self.actions.get(&current_state) {
-            Some(action) => Some(action.clone()),
-            None => None,
+        
+        match last_accepting_state {
+            Some(state) => {
+                let token = chars[..last_accepting_length].iter().collect::<String>();
+                let action = self.actions.get(&state).cloned().unwrap_or_else(|| "UNKNOWN".to_string());
+                let rest = input[last_accepting_length..].to_string();
+                (token, action, rest)
+            }
+            None => (String::new(), String::new(), input.to_string()),
         }
     }
 

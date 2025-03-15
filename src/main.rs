@@ -23,25 +23,17 @@ fn main() -> Result<(), String> {
         nfa = NFA::union(nfa, regex);
     }
 
-    println!("{}", nfa);
-
     let dfa = DFA::from(nfa);
 
     let tests = vec![
-        String::from(""),
-        String::from("0"),
-        String::from("bonjour0"),
-        String::from("bonjour"),
-        String::from("int"),
-        String::from("cha_"),
+        String::from("char hello"),
     ];
 
     for test in &tests {
-        let action = dfa.simulate(test);
+        let actions = dfa.simulate(test);
 
-        match action {
-            Some(action) => println!("matched: {}", action),
-            None => println!("not matched"),
+        for action in actions {
+            println!("{} - {}", action.0, action.1);
         }
     }
 
