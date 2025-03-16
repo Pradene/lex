@@ -73,6 +73,7 @@ impl From<Regex> for NFA {
             Regex::Plus(inner) => NFA::plus(NFA::from(*inner)),
 
             Regex::Bounded(inner, min, max) => NFA::bounded(NFA::from(*inner), min, max),
+            _ => panic!("Not implemented"),
         }
     }
 }

@@ -12,6 +12,9 @@ pub enum Regex {
     CharClass(BTreeSet<char>),
     NegatedCharClass(BTreeSet<char>),
     Dot,
+    StartAnchor, // ^ at start of regex
+    EndAnchor,   // $ at end of regex
+    Empty,       // Represents empty/epsilon regex
 }
 
 impl fmt::Display for Regex {
@@ -23,7 +26,6 @@ impl fmt::Display for Regex {
 impl Regex {
     pub fn new(regex: &str) -> Result<Regex, String> {
         let mut parser = RegexParser::new(regex);
-
         parser.parse()
     }
 
@@ -51,6 +53,15 @@ impl Regex {
             }
             Regex::Dot => {
                 write!(f, "{}Dot", indent_str)?;
+            }
+            Regex::StartAnchor => {
+                write!(f, "{}StartAnchor", indent_str)?;
+            }
+            Regex::EndAnchor => {
+                write!(f, "{}EndAnchor", indent_str)?;
+            }
+            Regex::Empty => {
+                write!(f, "{}Empty", indent_str)?;
             }
             Regex::Bounded(inner, min, max) => {
                 let range = match max {
@@ -122,7 +133,6 @@ impl RegexParser {
         if c.is_some() {
             self.advance();
         }
-
         c
     }
 
@@ -134,8 +144,43 @@ impl RegexParser {
         self.pos >= self.chars.len()
     }
 
+    fn match_string(&mut self, s: &str) -> bool {
+        for (i, expected) in s.chars().enumerate() {
+            if self.peek(i) != Some(expected) {
+                return false;
+            }
+        }
+
+        for _ in 0..s.len() {
+            self.advance();
+        }
+
+        true
+    }
+
     pub fn parse(&mut self) -> Result<Regex, String> {
-        let expr = self.parse_union()?;
+        if self.at_end() {
+            return Ok(Regex::Empty);
+        }
+
+        let start_anchored = if self.current_char() == Some('^') {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
+        let mut expr = self.parse_union()?;
+
+        if self.current_char() == Some('$') {
+            self.advance();
+            expr = Regex::Concat(Box::new(expr), Box::new(Regex::EndAnchor));
+        }
+
+        if start_anchored {
+            expr = Regex::Concat(Box::new(Regex::StartAnchor), Box::new(expr));
+        }
+
         if !self.at_end() {
             return Err(format!(
                 "Unexpected char '{}' at {}",
@@ -159,14 +204,14 @@ impl RegexParser {
     fn parse_concat(&mut self) -> Result<Regex, String> {
         let mut factors = Vec::new();
         while let Some(c) = self.current_char() {
-            if c == ')' || c == '|' {
+            if c == ')' || c == '|' || c == '$' {
                 break;
             }
             factors.push(self.parse_operator()?);
         }
 
         if factors.is_empty() {
-            Err("Empty concatenation".to_string())
+            Ok(Regex::Empty)
         } else {
             let mut expr = factors.remove(0);
             for factor in factors {
@@ -253,6 +298,9 @@ impl RegexParser {
             Some('\\') => self.parse_escape(),
             Some(c) => {
                 self.advance();
+                if c == '$' || c == '^' {
+                    return Err(format!("Unexpected '{}' in middle of pattern", c));
+                }
                 Ok(Regex::Char(c))
             }
             None => Err("Unexpected end of pattern".to_string()),
@@ -289,9 +337,24 @@ impl RegexParser {
             self.advance();
         }
 
+        // Handle POSIX character classes first
+        if self.current_char() == Some('[') && self.peek(1) == Some(':') {
+            // Parse POSIX character class like [[:alpha:]] directly
+            return self.parse_posix_class(negated);
+        }
+
         while let Some(c) = self.current_char() {
             if c == ']' {
                 break;
+            }
+
+            // Handle POSIX class notation inside character class
+            if c == '[' && self.peek(1) == Some(':') {
+                let class_chars = self.parse_named_class()?;
+                for char in class_chars {
+                    chars.insert(char);
+                }
+                continue;
             }
 
             if c == '\\' {
@@ -328,6 +391,103 @@ impl RegexParser {
         })
     }
 
+    fn parse_posix_class(&mut self, negated: bool) -> Result<Regex, String> {
+        // We're at the first '[' of something like [[:alpha:]]
+        self.advance(); // Skip first '['
+
+        if !self.match_string(":") {
+            return Err("Expected ':' after '[' in POSIX class".to_string());
+        }
+
+        let mut class_name = String::new();
+        while let Some(c) = self.current_char() {
+            if c == ':' {
+                break;
+            }
+            class_name.push(c);
+            self.advance();
+        }
+
+        if !self.match_string(":]") {
+            return Err("Expected ':]' at end of POSIX class".to_string());
+        }
+
+        if self.current_char() != Some(']') {
+            return Err("Expected ']' to close character class".to_string());
+        }
+        self.advance(); // Skip final ']'
+
+        // Look up the named class
+        let class_name_str = class_name.as_str();
+        if let Some(chars) = self.get_named_class(class_name_str) {
+            Ok(if negated {
+                Regex::NegatedCharClass(chars.clone())
+            } else {
+                Regex::CharClass(chars.clone())
+            })
+        } else {
+            Err(format!("Unknown POSIX character class '{}'", class_name))
+        }
+    }
+
+    fn get_named_class(&self, name: &str) -> Option<BTreeSet<char>> {
+        match name {
+            "alpha" => Some(('a'..='z').chain('A'..='Z').collect()),
+            "digit" => Some(('0'..='9').collect()),
+            "alnum" => Some(('a'..='z').chain('A'..='Z').chain('0'..='9').collect()),
+            "space" => Some(
+                [' ', '\t', '\n', '\r', '\u{000B}', '\u{000C}']
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+            "punct" => Some("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~".chars().collect()),
+            "graph" => Some((0x21..=0x7E).filter_map(|c| char::from_u32(c)).collect()),
+            "print" => Some((0x20..=0x7E).filter_map(|c| char::from_u32(c)).collect()),
+            "xdigit" => Some(('0'..='9').chain('a'..='f').chain('A'..='F').collect()),
+            "blank" => Some([' ', '\t'].iter().cloned().collect()),
+            "cntrl" => Some(
+                (0x00..=0x1F)
+                    .chain(0x7F..=0x7F)
+                    .filter_map(|c| char::from_u32(c))
+                    .collect(),
+            ),
+            "lower" => Some(('a'..='z').collect()),
+            "upper" => Some(('A'..='Z').collect()),
+            _ => None,
+        }
+    }
+
+    fn parse_named_class(&mut self) -> Result<BTreeSet<char>, String> {
+        // We're at the first '[' of something like [:alpha:]
+        self.advance(); // Skip '['
+
+        if !self.match_string(":") {
+            return Err("Expected ':' after '[' in named class".to_string());
+        }
+
+        let mut class_name = String::new();
+        while let Some(c) = self.current_char() {
+            if c == ':' {
+                break;
+            }
+            class_name.push(c);
+            self.advance();
+        }
+
+        if !self.match_string(":]") {
+            return Err("Expected ':]' at end of named class".to_string());
+        }
+
+        // Look up the named class
+        let class_name_str = class_name.as_str();
+        if let Some(chars) = self.get_named_class(class_name_str) {
+            Ok(chars.clone())
+        } else {
+            Err(format!("Unknown named character class '{}'", class_name))
+        }
+    }
+
     fn add_char_range(
         &self,
         start: char,
@@ -359,9 +519,40 @@ impl RegexParser {
                 self.advance();
             }
             Some('s') => {
-                [' ', '\t', '\n', '\r'].iter().for_each(|&c| {
-                    chars.insert(c);
-                });
+                [' ', '\t', '\n', '\r', '\u{000B}', '\u{000C}']
+                    .iter()
+                    .for_each(|&c| {
+                        chars.insert(c);
+                    });
+                self.advance();
+            }
+            // Handle lex-specific escape sequences
+            Some('a') => {
+                chars.insert('\u{0007}'); // Bell
+                self.advance();
+            }
+            Some('b') => {
+                chars.insert('\u{0008}'); // Backspace
+                self.advance();
+            }
+            Some('f') => {
+                chars.insert('\u{000C}'); // Form feed
+                self.advance();
+            }
+            Some('n') => {
+                chars.insert('\n');
+                self.advance();
+            }
+            Some('r') => {
+                chars.insert('\r');
+                self.advance();
+            }
+            Some('t') => {
+                chars.insert('\t');
+                self.advance();
+            }
+            Some('v') => {
+                chars.insert('\u{000B}'); // Vertical tab
                 self.advance();
             }
             Some(c) => {
@@ -402,14 +593,103 @@ impl RegexParser {
             Some('s') => {
                 self.advance();
                 Ok(Regex::CharClass(
-                    [' ', '\t', '\n', '\r'].iter().cloned().collect(),
+                    [' ', '\t', '\n', '\r', '\u{000B}', '\u{000C}']
+                        .iter()
+                        .cloned()
+                        .collect(),
                 ))
             }
             Some('S') => {
                 self.advance();
                 let mut set: BTreeSet<char> = (0..=127).filter_map(|c| char::from_u32(c)).collect();
-                set.retain(|c| ![' ', '\t', '\n', '\r'].contains(c));
+                set.retain(|c| ![' ', '\t', '\n', '\r', '\u{000B}', '\u{000C}'].contains(c));
                 Ok(Regex::NegatedCharClass(set))
+            }
+            // Handle lex-specific escape sequences
+            Some('a') => {
+                self.advance();
+                Ok(Regex::Char('\u{0007}')) // Bell
+            }
+            Some('b') => {
+                self.advance();
+                Ok(Regex::Char('\u{0008}')) // Backspace
+            }
+            Some('f') => {
+                self.advance();
+                Ok(Regex::Char('\u{000C}')) // Form feed
+            }
+            Some('n') => {
+                self.advance();
+                Ok(Regex::Char('\n'))
+            }
+            Some('r') => {
+                self.advance();
+                Ok(Regex::Char('\r'))
+            }
+            Some('t') => {
+                self.advance();
+                Ok(Regex::Char('\t'))
+            }
+            Some('v') => {
+                self.advance();
+                Ok(Regex::Char('\u{000B}')) // Vertical tab
+            }
+            // Handle octal escapes \123
+            Some(c) if c.is_digit(8) => {
+                let mut octal = String::new();
+                octal.push(c);
+                self.advance();
+
+                // Read up to 2 more octal digits
+                for _ in 0..2 {
+                    if let Some(digit) = self.current_char() {
+                        if digit.is_digit(8) {
+                            octal.push(digit);
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+
+                // Parse octal value
+                let value = u32::from_str_radix(&octal, 8)
+                    .map_err(|_| "Invalid octal escape".to_string())?;
+
+                if let Some(c) = char::from_u32(value) {
+                    Ok(Regex::Char(c))
+                } else {
+                    Err("Invalid character code".to_string())
+                }
+            }
+            // Handle hex escapes \xHH
+            Some('x') => {
+                self.advance();
+                let mut hex = String::new();
+
+                // Read exactly 2 hex digits
+                for _ in 0..2 {
+                    if let Some(digit) = self.current_char() {
+                        if digit.is_digit(16) {
+                            hex.push(digit);
+                            self.advance();
+                        } else {
+                            return Err("Expected hex digit in \\x escape".to_string());
+                        }
+                    } else {
+                        return Err("Incomplete hex escape".to_string());
+                    }
+                }
+
+                // Parse hex value
+                let value =
+                    u32::from_str_radix(&hex, 16).map_err(|_| "Invalid hex escape".to_string())?;
+
+                if let Some(c) = char::from_u32(value) {
+                    Ok(Regex::Char(c))
+                } else {
+                    Err("Invalid character code".to_string())
+                }
             }
             Some(c) => {
                 self.advance();

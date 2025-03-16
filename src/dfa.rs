@@ -118,7 +118,9 @@ impl From<NFA> for DFA {
                         let mut highest_priority_state: Option<StateID> = None;
                         for &nfa_state in &next_nfa_states {
                             if nfa.final_states.contains(&nfa_state) {
-                                if highest_priority_state.is_none() || nfa_state < highest_priority_state.unwrap() {
+                                if highest_priority_state.is_none()
+                                    || nfa_state < highest_priority_state.unwrap()
+                                {
                                     highest_priority_state = Some(nfa_state);
                                 }
                             }
@@ -149,37 +151,31 @@ impl DFA {
     pub fn simulate(&self, input: &str) -> Vec<(String, Action)> {
         let mut tokens = Vec::new();
         let mut remaining = input.to_string();
-        
+
         while !remaining.is_empty() {
-            if let Some(pos) = remaining.find(|c: char| !c.is_whitespace()) {
-                remaining = remaining[pos..].to_string();
-            } else {
-                break;
-            }
-            
             let (token, action, rest) = self.scan_next_token(&remaining);
             if token.is_empty() {
                 break;
             }
-            
+
             tokens.push((token, action));
             remaining = rest;
         }
-        
+
         tokens
     }
-    
+
     fn scan_next_token(&self, input: &str) -> (String, Action, String) {
         let mut current_state = self.start_state;
         let mut last_accepting_state = None;
         let mut last_accepting_length = 0;
-        
+
         let chars: Vec<char> = input.chars().collect();
         for (i, &c) in chars.iter().enumerate() {
             if !self.alphabet.contains(&c) {
                 break;
             }
-            
+
             match self.transitions.get(&(current_state, Symbol::Char(c))) {
                 Some(&next_state) => {
                     current_state = next_state;
@@ -191,11 +187,15 @@ impl DFA {
                 None => break,
             }
         }
-        
+
         match last_accepting_state {
             Some(state) => {
                 let token = chars[..last_accepting_length].iter().collect::<String>();
-                let action = self.actions.get(&state).cloned().unwrap_or_else(|| "UNKNOWN".to_string());
+                let action = self
+                    .actions
+                    .get(&state)
+                    .cloned()
+                    .unwrap_or_else(|| "UNKNOWN".to_string());
                 let rest = input[last_accepting_length..].to_string();
                 (token, action, rest)
             }

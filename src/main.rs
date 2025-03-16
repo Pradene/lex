@@ -25,9 +25,7 @@ fn main() -> Result<(), String> {
 
     let dfa = DFA::from(nfa);
 
-    let tests = vec![
-        String::from("char hello"),
-    ];
+    let tests = vec![String::from("char hello")];
 
     for test in &tests {
         let actions = dfa.simulate(test);
