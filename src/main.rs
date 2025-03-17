@@ -1,6 +1,5 @@
-use lex::Table;
+use lex::LexFile;
 use lex::DFA;
-use lex::NFA;
 
 use std::env;
 
@@ -12,29 +11,27 @@ fn main() -> Result<(), String> {
         .find(|window| window[0] == "--language")
         .map(|window| window[1].clone())
         .unwrap_or_else(|| "c".to_string());
-
     println!("language: {}", language);
 
-    let path = args
+    let input = args
         .windows(2)
         .find(|window| window[0] == "--input")
         .map(|window| window[1].clone())
-        .unwrap_or_else(|| panic!("You must provide an input path"));
+        .unwrap_or_else(|| panic!("You must provide an input input"));
+    println!("input: {}", input);
 
-    println!("path: {}", path);
-    let table = Table::new(path)?;
+    let output = args
+        .windows(2)
+        .find(|window| window[0] == "--output")
+        .map(|window| window[1].clone())
+        .unwrap_or_else(|| "lex.yy.c".to_string());
+    println!("output: {}", output);
 
-    let mut nfa = NFA::empty();
+    let file = LexFile::new(input)?;
 
-    for rule in table.rules {
-        let regex = NFA::new(rule.pattern, rule.action)?;
-        nfa = NFA::union(nfa, regex);
-    }
-
-    let dfa = DFA::from(nfa);
+    let dfa = DFA::new(&file)?;
 
     let tests = vec![String::from("42+1337+(21*19)\n")];
-
     for test in &tests {
         let actions = dfa.simulate(test);
 

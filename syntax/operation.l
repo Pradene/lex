@@ -1,4 +1,8 @@
-[0-9]+      printf("NUMBER: %s\n", yytext);
+DIGIT       [0-9]+
+
+%%
+
+{DIGIT}     printf("NUMBER: %s\n", yytext);
 "+"         |
 "-"         |
 "*"         |

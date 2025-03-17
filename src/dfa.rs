@@ -3,7 +3,7 @@ use std::convert::From;
 use std::default::Default;
 use std::fmt;
 
-use crate::{Action, StateID, Symbol, NFA};
+use crate::{Action, LexFile, StateID, Symbol, NFA};
 
 #[derive(Debug, Clone)]
 pub struct DFA {
@@ -29,8 +29,8 @@ impl Default for DFA {
 }
 
 impl DFA {
-    pub fn new(regex: String, action: String) -> Result<DFA, String> {
-        let nfa = NFA::new(regex, action)?;
+    pub fn new(lex: &LexFile) -> Result<DFA, String> {
+        let nfa = NFA::new(lex)?;
         let dfa = DFA::from(nfa);
 
         Ok(dfa)

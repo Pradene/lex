@@ -330,32 +330,32 @@ impl RegexParser {
 
     fn parse_literal(&mut self) -> Result<Regex, String> {
         self.advance();
-        
+
         let mut concat = Regex::Empty;
-        
+
         while let Some(c) = self.current_char() {
             if c == '"' {
                 self.advance();
                 return Ok(concat);
             } else if c == '\\' {
                 self.advance();
-                
+
                 if let Some(escaped_char) = self.current_char() {
                     let actual_char = match escaped_char {
                         'n' => '\n',
                         't' => '\t',
                         'r' => '\r',
                         'f' => '\u{000C}',
-                        'b' => '\u{0008}', 
-                        'a' => '\u{0007}', 
+                        'b' => '\u{0008}',
+                        'a' => '\u{0007}',
                         'v' => '\u{000B}',
                         '"' => '"',
                         '\\' => '\\',
                         _ => escaped_char,
                     };
-                    
+
                     self.advance();
-                    
+
                     let char_regex = Regex::Char(actual_char);
                     concat = if matches!(concat, Regex::Empty) {
                         char_regex
@@ -375,7 +375,7 @@ impl RegexParser {
                 self.advance();
             }
         }
-        
+
         Err("Unterminated string literal".to_string())
     }
 

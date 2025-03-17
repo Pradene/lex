@@ -2,10 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
 use std::fmt;
 
-use crate::Action;
 use crate::Regex;
 use crate::StateID;
 use crate::Symbol;
+use crate::Action;
+use crate::LexFile;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NFA {
@@ -61,30 +62,37 @@ impl Default for NFA {
 impl From<Regex> for NFA {
     fn from(regex: Regex) -> NFA {
         match regex {
+            Regex::Empty => NFA::empty(),
             Regex::Char(c) => NFA::char(c),
             Regex::CharClass(class) => NFA::char_class(class),
+            Regex::NegatedCharClass(class) => NFA::negated_char_class(class),
             Regex::Dot => NFA::dot(),
+
             Regex::Concat(left, right) => NFA::concat(NFA::from(*left), NFA::from(*right)),
             Regex::Union(left, right) => NFA::union(NFA::from(*left), NFA::from(*right)),
-
             Regex::Kleene(inner) => NFA::kleene(NFA::from(*inner)),
-            Regex::NegatedCharClass(class) => NFA::negated_char_class(class),
             Regex::Option(inner) => NFA::optional(NFA::from(*inner)),
             Regex::Plus(inner) => NFA::plus(NFA::from(*inner)),
-
             Regex::Bounded(inner, min, max) => NFA::bounded(NFA::from(*inner), min, max),
+
             _ => panic!("Not implemented"),
         }
     }
 }
 
 impl NFA {
-    pub fn new(regex: String, action: String) -> Result<NFA, String> {
-        let regex = Regex::new(&regex)?;
-        let mut nfa = NFA::from(regex);
+    pub fn new(lex: &LexFile) -> Result<NFA, String> {
+        let mut nfa = NFA::empty();
 
-        for state in nfa.final_states.clone() {
-            nfa.add_action(state, action.clone());
+        for rule in &lex.rules {
+            let regex = Regex::new(&rule.pattern)?;
+            let mut fragment = NFA::from(regex);
+
+            for state in fragment.final_states.clone() {
+                fragment.add_action(state, rule.action.clone());
+            }
+
+            nfa = NFA::union(nfa, fragment);
         }
 
         Ok(nfa)
