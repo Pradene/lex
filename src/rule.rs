@@ -15,8 +15,8 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn new(path: &str) -> Result<Table, String> {
-        let content = fs::read_to_string(path).expect("Should have been able to read the file");
+    pub fn new(path: String) -> Result<Table, String> {
+        let content = fs::read_to_string(path.clone()).expect("Should have been able to read the file");
         let lines: Vec<&str> = content.split('\n').collect();
 
         let mut rules: Vec<Rule> = Vec::new();

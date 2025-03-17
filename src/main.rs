@@ -7,13 +7,21 @@ use std::env;
 fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
 
-    let _language = args
+    let language = args
         .windows(2)
         .find(|window| window[0] == "--language")
         .map(|window| window[1].clone())
         .unwrap_or_else(|| "c".to_string());
 
-    let path = "syntax/scanner.l";
+    println!("language: {}", language);
+
+    let path = args
+        .windows(2)
+        .find(|window| window[0] == "--input")
+        .map(|window| window[1].clone())
+        .unwrap_or_else(|| panic!("You must provide an input path"));
+
+    println!("path: {}", path);
     let table = Table::new(path)?;
 
     let mut nfa = NFA::empty();
@@ -25,13 +33,13 @@ fn main() -> Result<(), String> {
 
     let dfa = DFA::from(nfa);
 
-    let tests = vec![String::from("char hello")];
+    let tests = vec![String::from("42+1337+(21*19)\n")];
 
     for test in &tests {
         let actions = dfa.simulate(test);
 
         for action in actions {
-            println!("{} - {}", action.0, action.1);
+            println!("{}", action.1);
         }
     }
 
