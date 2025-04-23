@@ -13,10 +13,10 @@ fn main() -> Result<(), String> {
     // println!("language: {}", language);
 
     let output = parser.get_argument("-t", "lex.yy.c");
-    println!("output: {}", output);
+    println!("output: {}\n", output);
     
     let input = parser.get_file();
-    println!("input: {}", input);
+    println!("input: {}\n", input);
     
     let file = LexFile::new(input)?;
 
@@ -27,7 +27,9 @@ fn main() -> Result<(), String> {
         let actions = dfa.simulate(test);
 
         for action in actions {
-            println!("{}", action.1);
+            let value = action.0.replace("\n", "\\n");
+            let action = action.1;
+            println!("{:<12}{}", value, action);
         }
     }
 
