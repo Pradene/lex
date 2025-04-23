@@ -1,32 +1,23 @@
 use lex::LexFile;
 use lex::DFA;
-
-use std::env;
+use lex::ArgsParser;
 
 fn main() -> Result<(), String> {
-    let args: Vec<String> = env::args().collect();
+    let parser = ArgsParser::new();
 
-    let language = args
-        .windows(2)
-        .find(|window| window[0] == "--language")
-        .map(|window| window[1].clone())
-        .unwrap_or_else(|| "c".to_string());
-    println!("language: {}", language);
+    if parser.args().len() < 2 {
+        return Err("usage: program [options] file".to_string());
+    }
+    
+    // let language = parser.get_argument("--language", "c");
+    // println!("language: {}", language);
 
-    let input = args
-        .windows(2)
-        .find(|window| window[0] == "--input")
-        .map(|window| window[1].clone())
-        .unwrap_or_else(|| panic!("You must provide an input input"));
-    println!("input: {}", input);
-
-    let output = args
-        .windows(2)
-        .find(|window| window[0] == "--output")
-        .map(|window| window[1].clone())
-        .unwrap_or_else(|| "lex.yy.c".to_string());
+    let output = parser.get_argument("-t", "lex.yy.c");
     println!("output: {}", output);
-
+    
+    let input = parser.get_file();
+    println!("input: {}", input);
+    
     let file = LexFile::new(input)?;
 
     let dfa = DFA::new(&file)?;
