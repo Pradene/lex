@@ -242,13 +242,6 @@ impl CodeGenerator {
         logic.push_str("}\n");
         logic.push_str("\n");
         
-        logic.push_str("void yyrestart(FILE *input_file) {\n");
-        logic.push_str("    yyin = input_file;\n");
-        logic.push_str("    yylineno = 1;\n");
-        logic.push_str("    yycolumn = 0;\n");
-        logic.push_str("}\n");
-        logic.push_str("\n");
-        
         // Main function
         logic.push_str("int main(int argc, char *argv[]) {\n");
         logic.push_str("    FILE *input_file = stdin;\n");
@@ -263,7 +256,7 @@ impl CodeGenerator {
         logic.push_str("    }\n");
         logic.push_str("\n");
         
-        logic.push_str("    yyrestart(input_file);\n");
+        logic.push_str("    yyin = input_file;\n");
         logic.push_str("    yylex();\n");
         logic.push_str("\n");
         

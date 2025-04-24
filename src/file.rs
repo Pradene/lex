@@ -165,14 +165,10 @@ impl LexFile {
                                 if brace_count > 0 {
                                     in_action_block = true;
 
-                                    // Add this pattern to pending patterns if it's not already
-                                    // part of an OR group
-                                    if pending_patterns.is_empty() {
-                                        pending_patterns.push(PendingPattern {
-                                            pattern,
-                                            line_number,
-                                        });
-                                    }
+                                    pending_patterns.push(PendingPattern {
+                                        pattern,
+                                        line_number,
+                                    });
                                 } else {
                                     // Single-line action
                                     if !pending_patterns.is_empty() {
@@ -204,7 +200,7 @@ impl LexFile {
                                         });
                                     }
                                     pending_patterns.clear();
-                                } 
+                                }
                                 rules.push(Rule { pattern, action });
                                 
                                 i += 1;
