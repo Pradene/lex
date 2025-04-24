@@ -23,11 +23,17 @@ impl ArgsParser {
             .unwrap_or_else(|| default.to_string())
     }
 
+    // Check if args contains flag
+    pub fn has_flag(&self, flag: &str) -> bool {
+        self.args.contains(&flag.to_string())
+    }
+
     // Get the file path (last argument)
     pub fn get_file(&self) -> String {
         self.args.last().unwrap().clone()
     }
 
+    // Get reference to args
     pub fn args(&self) -> &Vec<String> {
         &self.args
     }

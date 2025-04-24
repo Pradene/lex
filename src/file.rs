@@ -21,18 +21,18 @@ pub struct PendingPattern {
 pub struct LexFile {
     pub definitions: Definition,
     pub rules: Vec<Rule>,
-    pub user_code: String,
+    pub code: String,
 }
 
 impl LexFile {
-    pub fn new(path: String) -> Result<LexFile, String> {
+    pub fn new(path: &String) -> Result<LexFile, String> {
         let content =
             fs::read_to_string(path.clone()).map_err(|e| format!("Failed to read file: {}", e))?;
         let lines: Vec<&str> = content.split('\n').collect();
 
         let mut definitions: Definition = BTreeMap::new();
         let mut rules: Vec<Rule> = Vec::new();
-        let mut user_code = String::new();
+        let mut code = String::new();
         let mut pending_patterns: Vec<PendingPattern> = Vec::new();
 
         let mut current_section = LexSection::Definitions;
@@ -222,8 +222,8 @@ impl LexFile {
                 LexSection::UserCode => {
                     i += 1;
                     while i < lines.len() {
-                        user_code.push_str(lines[i]);
-                        user_code.push('\n');
+                        code.push_str(lines[i]);
+                        code.push('\n');
                         i += 1;
                     }
 
@@ -249,7 +249,7 @@ impl LexFile {
         Ok(LexFile {
             definitions,
             rules,
-            user_code,
+            code,
         })
     }
 
