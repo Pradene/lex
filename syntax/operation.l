@@ -7,6 +7,7 @@ DIGIT       [0-9]+
 "-"         |
 "*"         |
 "/"         printf("OPERATOR: %s\n", yytext);
+"="         printf("EQUAL\n");
 "("         printf("OPEN PARENTHESIS\n");
 ")"         printf("CLOSED PARENTHESIS\n");
 "\n"        printf("NEWLINE\n");

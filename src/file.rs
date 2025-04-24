@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fs};
 pub enum LexSection {
     Definitions,
     Rules,
-    UserCode,
+    Code,
 }
 
 type Definition = BTreeMap<String, String>;
@@ -48,7 +48,7 @@ impl LexFile {
             if line == "%%" {
                 match current_section {
                     LexSection::Definitions => current_section = LexSection::Rules,
-                    LexSection::Rules => current_section = LexSection::UserCode,
+                    LexSection::Rules => current_section = LexSection::Code,
                     _ => {
                         return Err(format!(
                             "Unexpected section separator at line {}",
@@ -204,9 +204,9 @@ impl LexFile {
                                         });
                                     }
                                     pending_patterns.clear();
-                                } else {
-                                    rules.push(Rule { pattern, action });
-                                }
+                                } 
+                                rules.push(Rule { pattern, action });
+                                
                                 i += 1;
                             }
                         } else {
@@ -219,7 +219,7 @@ impl LexFile {
                     }
                 }
 
-                LexSection::UserCode => {
+                LexSection::Code => {
                     i += 1;
                     while i < lines.len() {
                         code.push_str(lines[i]);

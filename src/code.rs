@@ -57,7 +57,8 @@ impl CodeGenerator {
         let mut table_code = String::new();
         
         // Define state type
-        table_code.push_str("typedef int StateID;\n\n");
+        table_code.push_str("typedef int StateID;\n");
+        table_code.push_str("\n");
         
         // Generate the transition table as a 2D array or switch statement
         table_code.push_str("static StateID transition(StateID state, unsigned char c) {\n");
@@ -99,7 +100,8 @@ impl CodeGenerator {
         table_code.push_str("    default:\n");
         table_code.push_str("        return -1; // Error state\n");
         table_code.push_str("    }\n");
-        table_code.push_str("}\n\n");
+        table_code.push_str("}\n");
+        table_code.push_str("\n");
         
         // Generate final states check
         table_code.push_str("static int is_accepting(StateID state) {\n");
@@ -130,7 +132,8 @@ impl CodeGenerator {
         table_code.push_str("        // No action for this state\n");
         table_code.push_str("        break;\n");
         table_code.push_str("    }\n");
-        table_code.push_str("}\n\n");
+        table_code.push_str("}\n");
+        table_code.push_str("\n");
         
         table_code
     }
@@ -144,7 +147,8 @@ impl CodeGenerator {
         logic.push_str("    static char *current_pos = NULL;\n");
         logic.push_str("    static char *buffer_end = NULL;\n");
         logic.push_str("    static char buffer[YY_BUFFER_SIZE];\n");
-        logic.push_str("    char *token_start;\n\n");
+        logic.push_str("    char *token_start;\n");
+        logic.push_str("\n");
         
         logic.push_str("    // Initialize buffer if first call\n");
         logic.push_str("    if (current_pos == NULL || current_pos >= buffer_end) {\n");
@@ -153,24 +157,29 @@ impl CodeGenerator {
         logic.push_str("        int n = fread(buffer, 1, YY_BUFFER_SIZE, yyin);\n");
         logic.push_str("        buffer_end = buffer + n;\n");
         logic.push_str("        if (n == 0) return 0; // EOF\n");
-        logic.push_str("    }\n\n");
+        logic.push_str("    }\n");
+        logic.push_str("\n");
         
         logic.push_str("yylex_restart:\n");
         logic.push_str("    token_start = current_pos;\n");
         logic.push_str("    StateID current_state = 0; // Start state\n");
         logic.push_str("    StateID last_accepting_state = -1;\n");
-        logic.push_str("    char *last_accepting_pos = NULL;\n\n");
+        logic.push_str("    char *last_accepting_pos = NULL;\n");
+        logic.push_str("\n");
         
         logic.push_str("    while (current_pos < buffer_end) {\n");
         logic.push_str("        unsigned char c = (unsigned char)*current_pos;\n");
-        logic.push_str("        StateID next_state = transition(current_state, c);\n\n");
+        logic.push_str("        StateID next_state = transition(current_state, c);\n");
+        logic.push_str("\n");
         
         logic.push_str("        if (next_state == -1) {\n");
         logic.push_str("            break; // No valid transition\n");
-        logic.push_str("        }\n\n");
+        logic.push_str("        }\n");
+        logic.push_str("\n");
         
         logic.push_str("        current_state = next_state;\n");
-        logic.push_str("        current_pos++;\n\n");
+        logic.push_str("        current_pos++;\n");
+        logic.push_str("\n");
         
         logic.push_str("        // Update line and column counts\n");
         logic.push_str("        if (c == '\\n') {\n");
@@ -178,13 +187,15 @@ impl CodeGenerator {
         logic.push_str("            yycolumn = 0;\n");
         logic.push_str("        } else {\n");
         logic.push_str("            yycolumn++;\n");
-        logic.push_str("        }\n\n");
+        logic.push_str("        }\n");
+        logic.push_str("\n");
         
         logic.push_str("        if (is_accepting(current_state)) {\n");
         logic.push_str("            last_accepting_state = current_state;\n");
         logic.push_str("            last_accepting_pos = current_pos;\n");
         logic.push_str("        }\n");
-        logic.push_str("    }\n\n");
+        logic.push_str("    }\n");
+        logic.push_str("\n");
         
         logic.push_str("    if (last_accepting_state != -1) {\n");
         logic.push_str("        // Found a match - set up yytext and yyleng\n");
@@ -195,21 +206,26 @@ impl CodeGenerator {
         logic.push_str("            exit(1);\n");
         logic.push_str("        }\n");
         logic.push_str("        memcpy(yytext, token_start, yyleng);\n");
-        logic.push_str("        yytext[yyleng] = '\\0';\n\n");
+        logic.push_str("        yytext[yyleng] = '\\0';\n");
+        logic.push_str("\n");
         
         logic.push_str("        // Reposition the current_pos to where we accepted\n");
-        logic.push_str("        current_pos = last_accepting_pos;\n\n");
+        logic.push_str("        current_pos = last_accepting_pos;\n");
+        logic.push_str("\n");
         
         logic.push_str("        // Execute the associated action\n");
-        logic.push_str("        execute_action(last_accepting_state);\n\n");
+        logic.push_str("        execute_action(last_accepting_state);\n");
+        logic.push_str("\n");
         
         logic.push_str("        // Free yytext before returning since the action should have consumed it\n");
         logic.push_str("        free(yytext);\n");
-        logic.push_str("        yytext = NULL;\n\n");
+        logic.push_str("        yytext = NULL;\n");
+        logic.push_str("\n");
         
         logic.push_str("        // Return to get the next token\n");
         logic.push_str("        goto yylex_restart;\n");
-        logic.push_str("    }\n\n");
+        logic.push_str("    }\n");
+        logic.push_str("\n");
         
         // Handle error case - skip invalid character
         logic.push_str("    if (current_pos < buffer_end) {\n");
@@ -219,10 +235,12 @@ impl CodeGenerator {
         logic.push_str("(unsigned char)*current_pos, yylineno, yycolumn);\n");
         logic.push_str("        current_pos++; // Skip the problematic character\n");
         logic.push_str("        goto yylex_restart;\n");
-        logic.push_str("    }\n\n");
+        logic.push_str("    }\n");
+        logic.push_str("\n");
         
         logic.push_str("    return 0; // EOF\n");
-        logic.push_str("}\n\n");
+        logic.push_str("}\n");
+        logic.push_str("\n");
         
         logic.push_str("void yyrestart(FILE *input_file) {\n");
         logic.push_str("    yyin = input_file;\n");
@@ -233,7 +251,8 @@ impl CodeGenerator {
         
         // Main function
         logic.push_str("int main(int argc, char *argv[]) {\n");
-        logic.push_str("    FILE *input_file = stdin;\n\n");
+        logic.push_str("    FILE *input_file = stdin;\n");
+        logic.push_str("\n");
         
         logic.push_str("    if (argc > 1) {\n");
         logic.push_str("        input_file = fopen(argv[1], \"r\");\n");
@@ -241,22 +260,21 @@ impl CodeGenerator {
         logic.push_str("            fprintf(stderr, \"Cannot open file %s\\n\", argv[1]);\n");
         logic.push_str("            return 1;\n");
         logic.push_str("        }\n");
-        logic.push_str("    }\n\n");
+        logic.push_str("    }\n");
+        logic.push_str("\n");
         
         logic.push_str("    yyrestart(input_file);\n");
-        logic.push_str("    yylex();\n\n");
+        logic.push_str("    yylex();\n");
+        logic.push_str("\n");
         
         logic.push_str("    if (input_file != stdin) {\n");
         logic.push_str("        fclose(input_file);\n");
-        logic.push_str("    }\n\n");
+        logic.push_str("    }\n");
+        logic.push_str("\n");
         
         logic.push_str("    return 0;\n");
         logic.push_str("}\n");
         logic.push_str("\n");
-        
-        // Add stub implementation for action functions if they are not defined in user code
-        // This ensures the program will compile even if user doesn't define all actions
-        logic.push_str("// Default implementations for action functions\n");
         
         logic
     }
