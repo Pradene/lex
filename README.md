@@ -1,6 +1,16 @@
 # Lex
 
-This project is a lexer generator from syntax file written in rust. (Currently in development).
+This project is a lexer generator from a syntax file written in rust.  
+Generate C code from a syntax file (See examples).   
+(Currently in development).
+
+## Usage
+
+Run the bash script with a syntax file or default is syntax/operation.lexer
+``` bash
+./build.sh [file]
+```
+
 
 ## Ressources
 
