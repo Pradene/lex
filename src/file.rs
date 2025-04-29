@@ -19,6 +19,7 @@ pub struct PendingPattern {
 }
 
 pub struct LexFile {
+    pub definitions_code: Vec<String>,
     pub definitions: Definition,
     pub rules: Vec<Rule>,
     pub code: String,
@@ -31,6 +32,7 @@ impl LexFile {
         let lines: Vec<&str> = content.split('\n').collect();
 
         let mut definitions: Definition = BTreeMap::new();
+        let mut definitions_code: Vec<String> = Vec::new();
         let mut rules: Vec<Rule> = Vec::new();
         let mut code = String::new();
         let mut pending_patterns: Vec<PendingPattern> = Vec::new();
@@ -77,6 +79,7 @@ impl LexFile {
                         i += 1;
                         while i < lines.len() && !lines[i].trim().starts_with("%}") {
                             // Add to definitions as special C code block
+                            definitions_code.push(lines[i].to_string());
                             i += 1;
                         }
 
@@ -202,7 +205,7 @@ impl LexFile {
                                     pending_patterns.clear();
                                 }
                                 rules.push(Rule { pattern, action });
-                                
+
                                 i += 1;
                             }
                         } else {
@@ -243,6 +246,7 @@ impl LexFile {
         }
 
         Ok(LexFile {
+            definitions_code,
             definitions,
             rules,
             code,

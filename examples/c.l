@@ -1,3 +1,7 @@
+%{
+  #include <stdio.h>
+%}
+
 DIGIT       [0-9]
 NUMBER      {DIGIT}+\.?{DIGIT}*
 ID          [a-zA-Z][a-zA-Z0-9_]*
@@ -44,6 +48,7 @@ COMMENT     \/\/.*
 ","         { printf("COMMA\n"); }
 
 "\n"        printf("NEWLINE\n");
-[[:blank:]] { /* ignore whitespaces */ }
+"\t"        printf("TAB\n");
+// [[:blank:]] { /* ignore whitespaces */ }
 .           { printf("UNRECOGNIZED: %s\n", yytext); }
 

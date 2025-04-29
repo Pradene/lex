@@ -14,4 +14,3 @@ DIGIT       [0-9]+\.?[0-9]*
 ")"         printf("CLOSED PARENTHESIS\n");
 "\n"        printf("NEWLINE\n");
 [[:blank:]] // ignore whitespaces
-.           printf("Invalid character: %c\n", *yytext);

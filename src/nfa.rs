@@ -2,11 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
 use std::fmt;
 
+use crate::Action;
+use crate::LexFile;
 use crate::Regex;
 use crate::StateID;
 use crate::Symbol;
-use crate::Action;
-use crate::LexFile;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NFA {
@@ -85,7 +85,8 @@ impl NFA {
         let mut nfa = NFA::empty();
 
         for rule in &lex.rules {
-            let regex = Regex::new(&rule.pattern)?;
+            let regex =
+                Regex::new(&rule.pattern).map_err(|e| format!("{} : {}", rule.pattern, e))?;
             let mut fragment = NFA::from(regex);
 
             for state in fragment.final_states.clone() {

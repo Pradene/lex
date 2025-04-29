@@ -32,10 +32,16 @@ impl CodeGenerator {
         // Generate the header part of the lexer code
         // This includes standard includes, types, etc.
         let mut header = String::new();
+
+        println!("{:?}", self.file.definitions_code);
+        for line in &self.file.definitions_code {
+            header.push_str(line);
+            header.push_str("\n");
+        }
+
+        header.push_str("#include <string.h>\n");
         header.push_str("#include <stdio.h>\n");
         header.push_str("#include <stdlib.h>\n");
-        header.push_str("#include <string.h>\n");
-        header.push_str("#include <ctype.h>\n");
         header.push_str("\n");
 
         header.push_str("#define YY_BUFFER_SIZE 16384\n");
@@ -70,7 +76,6 @@ impl CodeGenerator {
             table_code.push_str("        switch(c) {\n");
 
             // Find all transitions from this state
-            let mut transitions_found = false;
             for ((from_state, symbol), to_state) in &self.dfa.transitions {
                 if from_state == state {
                     if let crate::Symbol::Char(ch) = symbol {
@@ -82,19 +87,12 @@ impl CodeGenerator {
                             char_description(*ch)
                         ));
                         table_code.push_str(&format!("                return {};\n", to_state));
-                        transitions_found = true;
                     }
                 }
             }
 
-            if !transitions_found {
-                table_code.push_str("            default:\n");
-                table_code.push_str("                return -1; // Error state\n");
-            } else {
-                table_code.push_str("            default:\n");
-                table_code.push_str("                return -1; // Error state\n");
-            }
-
+            table_code.push_str("            default:\n");
+            table_code.push_str("                return -1; // Error state\n");
             table_code.push_str("        }\n");
         }
 
@@ -231,15 +229,17 @@ impl CodeGenerator {
         logic.push_str("\n");
 
         // Handle error case - skip invalid character
+        logic.push_str("\n");
         logic.push_str("    if (current_pos < buffer_end) {\n");
-        logic.push_str("        fprintf(stderr, \"Error: Unrecognized character '");
-        logic.push_str("%c' (ASCII %d) at line %d, column %d\\n\", ");
-        logic.push_str("isprint((unsigned char)*current_pos) ? *current_pos : ' ', ");
-        logic.push_str("(unsigned char)*current_pos, yylineno, yycolumn);\n");
-        logic.push_str("        current_pos++; // Skip the problematic character\n");
+        logic.push_str("        fprintf(stderr, \"Lexer error: Unexpected character '");
+        logic.push_str("%c' (0x%02X) at line %d, column %d\\n\",\n");
+        logic.push_str(
+            "                (*current_pos >= 32 && *current_pos <= 126) ? *current_pos : '?',\n",
+        );
+        logic.push_str("                (unsigned char)*current_pos, yylineno, yycolumn);\n");
+        logic.push_str("        current_pos++; // Skip invalid character\n");
         logic.push_str("        goto yylex_restart;\n");
         logic.push_str("    }\n");
-        logic.push_str("\n");
 
         logic.push_str("    return 0; // EOF\n");
         logic.push_str("}\n");
