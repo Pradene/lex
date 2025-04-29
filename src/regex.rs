@@ -429,7 +429,14 @@ impl RegexParser {
         }
 
         if self.current_char() != Some(']') {
-            return Err("Unclosed character class".to_string());
+            // grab a few chars before & after pos for context
+            let start = self.pos.saturating_sub(10);
+            let end = (self.pos + 10).min(self.chars.len());
+            let snippet: String = self.chars[start..end].iter().collect();
+            return Err(format!(
+                "Unclosed character class at pos {}: …{}…",
+                self.pos, snippet
+            ));
         }
         self.advance();
 
