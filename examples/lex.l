@@ -26,5 +26,5 @@ if|then|begin|end|procedure|function        {
 "+"|"-"|"*"|"/"         printf("An operator: %s\n", yytext);
 
 "{"[^}\n]*"}"           /* Eat up one-line comments. */
-[\t\n]+                 /* Eat up white space. */
+[ \t\n]+                /* Eat up white space. */
 .                       printf("Unrecognized character: %s\n", yytext);

@@ -140,83 +140,82 @@ impl LexFile {
                         i += 1;
                     } else {
                         // Parse pattern/action rule
-                        if let Some(pos) = line.find(|c: char| c.is_whitespace()) {
-                            let pattern = line[..pos].trim().to_string();
-                            let action_start = line[pos..].trim();
+                        match Self::split_pattern_action(line) {
+                            Ok((pattern, action)) => {
+                                let pattern = LexFile::expand_macros(&pattern, &definitions)?;
 
-                            let pattern = LexFile::expand_macros(&pattern, &definitions)?;
-
-                            if action_start == "|" {
-                                // OR pattern - add to pending patterns
-                                pending_patterns.push(PendingPattern {
-                                    pattern,
-                                    line_number,
-                                });
-                                i += 1;
-                            } else if action_start.starts_with("{") {
-                                // Start of action block
-                                action_accumulator = action_start.to_string();
-                                action_accumulator.push('\n');
-
-                                // Count opening braces
-                                brace_count = 1;
-                                for c in action_start.chars().skip(1) {
-                                    if c == '{' {
-                                        brace_count += 1;
-                                    } else if c == '}' {
-                                        brace_count -= 1;
-                                    }
-                                }
-
-                                if brace_count > 0 {
-                                    in_action_block = true;
-
+                                if action == "|" {
+                                    // OR pattern - add to pending patterns
                                     pending_patterns.push(PendingPattern {
                                         pattern,
                                         line_number,
                                     });
+                                    i += 1;
+                                } else if action.starts_with("{") {
+                                    // Start of action block
+                                    action_accumulator = action.to_string();
+                                    action_accumulator.push('\n');
+    
+                                    // Count opening braces
+                                    brace_count = 1;
+                                    for c in action.chars().skip(1) {
+                                        if c == '{' {
+                                            brace_count += 1;
+                                        } else if c == '}' {
+                                            brace_count -= 1;
+                                        }
+                                    }
+    
+                                    if brace_count > 0 {
+                                        in_action_block = true;
+    
+                                        pending_patterns.push(PendingPattern {
+                                            pattern,
+                                            line_number,
+                                        });
+                                    } else {
+                                        // Single-line action
+                                        if !pending_patterns.is_empty() {
+                                            for pending_pattern in &pending_patterns {
+                                                rules.push(Rule::new(
+                                                    pending_pattern.pattern.clone(),
+                                                    action_accumulator.clone(),
+                                                )?);
+                                            }
+                                            pending_patterns.clear();
+                                        } else {
+                                            rules.push(Rule::new(
+                                                pattern,
+                                                action_accumulator.clone(),
+                                            )?);
+                                        }
+                                        action_accumulator.clear();
+                                    }
+                                    i += 1;
                                 } else {
-                                    // Single-line action
+                                    // Single-line action without braces
+                                    let action = action.to_string();
+    
                                     if !pending_patterns.is_empty() {
                                         for pending_pattern in &pending_patterns {
                                             rules.push(Rule::new(
                                                 pending_pattern.pattern.clone(),
-                                                action_accumulator.clone(),
+                                                action.clone(),
                                             )?);
                                         }
                                         pending_patterns.clear();
-                                    } else {
-                                        rules.push(Rule::new(
-                                            pattern,
-                                            action_accumulator.clone(),
-                                        )?);
                                     }
-                                    action_accumulator.clear();
+                                    rules.push(Rule::new(pattern, action)?);
+    
+                                    i += 1;
                                 }
-                                i += 1;
-                            } else {
-                                // Single-line action without braces
-                                let action = action_start.to_string();
-
-                                if !pending_patterns.is_empty() {
-                                    for pending_pattern in &pending_patterns {
-                                        rules.push(Rule::new(
-                                            pending_pattern.pattern.clone(),
-                                            action.clone(),
-                                        )?);
-                                    }
-                                    pending_patterns.clear();
-                                }
-                                rules.push(Rule::new(pattern, action)?);
-
-                                i += 1;
                             }
-                        } else {
-                            // Malformed line
-                            return Err(format!(
-                                "Error: {}:{} - Malformed rule",
-                                path, line_number
-                            ));
+                            Err(e) => {
+                                return Err(format!(
+                                    "Error: {}:{}: {}",
+                                    path, line_number, e
+                                ));
+                            }
                         }
                     }
                 }
@@ -256,6 +255,62 @@ impl LexFile {
         })
     }
 
+    fn split_pattern_action(line: &str) -> Result<(String, String), String> {
+        // Find the first whitespace that's not inside brackets, quotes, or other special constructs
+        let mut in_bracket = 0;   // Track bracket nesting level
+        let mut in_quote = false; // Track if we're in a quoted string
+        let mut escaped = false;  // Track if the current character is escaped
+        let mut split_pos = None;
+        
+        for (i, c) in line.char_indices() {
+            if escaped {
+                // Skip this character as it's escaped
+                escaped = false;
+                continue;
+            }
+            
+            if c == '\\' {
+                // Next character is escaped
+                escaped = true;
+                continue;
+            }
+            
+            match c {
+                '[' if !in_quote => in_bracket += 1,
+                ']' if !in_quote => {
+                    if in_bracket > 0 {
+                        in_bracket -= 1;
+                    }
+                },
+                '"' => in_quote = !in_quote,
+                ' ' | '\t' => {
+                    // Only consider this as a split point if we're not inside any construct
+                    if in_bracket == 0 && !in_quote {
+                        split_pos = Some(i);
+                        break;
+                    }
+                },
+                _ => {}
+            }
+        }
+        
+        // If we found a valid split position
+        if let Some(pos) = split_pos {
+            let pattern = line[0..pos].trim().to_string();
+            let action = line[pos..].trim().to_string();
+            
+            if !pattern.is_empty() {
+                Ok((pattern, action))
+            } else {
+                Err("Empty pattern in rule".to_string())
+            }
+        } else {
+            // No valid split found - this could be just a pattern with no action
+            // or an error depending on your requirements
+            Err(format!("Could not split rule and action: {}", line))
+        }
+    }
+
     fn expand_macros(
         pattern: &str,
         definitions: &BTreeMap<String, String>,
@@ -290,7 +345,7 @@ impl LexFile {
 
     pub fn dfa(&self) -> Result<DFA, String> {
         let mut nfa = NFA::empty();
-        
+
         for rule in &self.rules {
             let regex =
                 Regex::new(&rule.pattern).map_err(|e| format!("{} : {}", rule.pattern, e))?;
