@@ -39,7 +39,7 @@ impl CodeGenerator {
             header.push_str("\n");
         }
 
-        header.push_str("#include \"lib.h\"\n");
+        header.push_str("#include \"libl.h\"\n");
         header.push_str("#include <string.h>\n");
         header.push_str("#include <stdio.h>\n");
         header.push_str("#include <stdlib.h>\n");

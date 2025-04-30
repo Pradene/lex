@@ -1,12 +1,12 @@
 # Compiler and flags
 CC = cc
-CFLAGS = -Wall -Wextra -Werror -Ilib
+CFLAGS = -Wall -Wextra -Werror -Ilibl
 LDFLAGS = -L. -ll
 
 # Project structure
 LEX = ./lex
-LIB_SRC = lib/lib.c
-LIB_HEADER = lib/lib.h
+LIB_SRC = libl/libl.c
+LIB_HEADER = libl/libl.h
 LIB_OBJ = $(LIB_SRC:.c=.o)
 LIB_NAME = libl.a
 
