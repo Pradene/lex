@@ -1,5 +1,7 @@
 use std::{collections::BTreeMap, fs};
 
+use crate::{NFA, DFA, Regex};
+
 pub enum LexSection {
     Definitions,
     Rules,
@@ -10,6 +12,7 @@ type Definition = BTreeMap<String, String>;
 
 pub struct Rule {
     pub pattern: String,
+    pub nfa: NFA,
     pub action: String,
 }
 
@@ -121,10 +124,10 @@ impl LexFile {
                                     // Add rules for all pending patterns
                                     if !pending_patterns.is_empty() {
                                         for pending_pattern in &pending_patterns {
-                                            rules.push(Rule {
-                                                pattern: pending_pattern.pattern.clone(),
-                                                action: action_accumulator.clone(),
-                                            });
+                                            rules.push(Rule::new(
+                                                pending_pattern.pattern.clone(),
+                                                action_accumulator.clone(),
+                                            )?);
                                         }
                                         pending_patterns.clear();
                                     }
@@ -176,17 +179,17 @@ impl LexFile {
                                     // Single-line action
                                     if !pending_patterns.is_empty() {
                                         for pending_pattern in &pending_patterns {
-                                            rules.push(Rule {
-                                                pattern: pending_pattern.pattern.clone(),
-                                                action: action_accumulator.clone(),
-                                            });
+                                            rules.push(Rule::new(
+                                                pending_pattern.pattern.clone(),
+                                                action_accumulator.clone(),
+                                            )?);
                                         }
                                         pending_patterns.clear();
                                     } else {
-                                        rules.push(Rule {
+                                        rules.push(Rule::new(
                                             pattern,
-                                            action: action_accumulator.clone(),
-                                        });
+                                            action_accumulator.clone(),
+                                        )?);
                                     }
                                     action_accumulator.clear();
                                 }
@@ -197,14 +200,14 @@ impl LexFile {
 
                                 if !pending_patterns.is_empty() {
                                     for pending_pattern in &pending_patterns {
-                                        rules.push(Rule {
-                                            pattern: pending_pattern.pattern.clone(),
-                                            action: action.clone(),
-                                        });
+                                        rules.push(Rule::new(
+                                            pending_pattern.pattern.clone(),
+                                            action.clone(),
+                                        )?);
                                     }
                                     pending_patterns.clear();
                                 }
-                                rules.push(Rule { pattern, action });
+                                rules.push(Rule::new(pattern, action)?);
 
                                 i += 1;
                             }
@@ -284,10 +287,29 @@ impl LexFile {
 
         Ok(result)
     }
+
+    pub fn dfa(&self) -> Result<DFA, String> {
+        let mut nfa = NFA::empty();
+        
+        for rule in &self.rules {
+            let regex =
+                Regex::new(&rule.pattern).map_err(|e| format!("{} : {}", rule.pattern, e))?;
+            let mut fragment = NFA::from(regex);
+        
+            for state in fragment.final_states.clone() {
+                fragment.add_action(state, rule.action.clone());
+            }
+        
+            nfa = NFA::union(nfa, fragment);
+        }
+
+        Ok(DFA::from(nfa))
+    }
 }
 
 impl Rule {
-    pub fn new(pattern: String, action: String) -> Rule {
-        Rule { pattern, action }
+    pub fn new(pattern: String, action: String) -> Result<Rule, String> {
+        let nfa = NFA::new(&pattern).map_err(|e| format!("{}", e))?;
+        Ok(Rule { pattern, nfa, action })
     }
 }

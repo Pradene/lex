@@ -3,7 +3,6 @@ use std::default::Default;
 use std::fmt;
 
 use crate::Action;
-use crate::LexFile;
 use crate::Regex;
 use crate::StateID;
 use crate::Symbol;
@@ -81,20 +80,10 @@ impl From<Regex> for NFA {
 }
 
 impl NFA {
-    pub fn new(lex: &LexFile) -> Result<NFA, String> {
-        let mut nfa = NFA::empty();
-
-        for rule in &lex.rules {
-            let regex =
-                Regex::new(&rule.pattern).map_err(|e| format!("{} : {}", rule.pattern, e))?;
-            let mut fragment = NFA::from(regex);
-
-            for state in fragment.final_states.clone() {
-                fragment.add_action(state, rule.action.clone());
-            }
-
-            nfa = NFA::union(nfa, fragment);
-        }
+    pub fn new(string: &String) -> Result<NFA, String> {
+        let nfa = NFA::from(
+            Regex::new(string).map_err(|e| format!("{} : {}", string, e))?
+        );
 
         Ok(nfa)
     }
@@ -115,7 +104,7 @@ impl NFA {
         state
     }
 
-    fn add_action(&mut self, state: StateID, action: Action) {
+    pub fn add_action(&mut self, state: StateID, action: Action) {
         self.actions.insert(state, action);
     }
 

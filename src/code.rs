@@ -6,11 +6,11 @@ pub struct CodeGenerator {
 }
 
 impl CodeGenerator {
-    pub fn new(file: LexFile, dfa: DFA) -> Self {
+    pub fn new(file: LexFile, dfa: DFA) -> Self {        
         CodeGenerator { file, dfa }
     }
 
-    pub fn generate_code(&self) -> String {
+    pub fn code(&self) -> String {
         let mut code = String::new();
 
         // Add user-defined code sections from the lexer file
@@ -39,6 +39,7 @@ impl CodeGenerator {
             header.push_str("\n");
         }
 
+        header.push_str("#include \"lib.h\"\n");
         header.push_str("#include <string.h>\n");
         header.push_str("#include <stdio.h>\n");
         header.push_str("#include <stdlib.h>\n");
@@ -47,12 +48,6 @@ impl CodeGenerator {
         header.push_str("#define YY_BUFFER_SIZE 16384\n");
         header.push_str("\n");
 
-        // Define yytext and yyleng as global variables
-        header.push_str("char* yytext;\n");
-        header.push_str("int   yyleng;\n");
-        header.push_str("int   yylineno = 1;\n");
-        header.push_str("int   yycolumn = 0;\n");
-        header.push_str("FILE *yyin = NULL;\n");
         header.push_str("\n");
 
         header
@@ -242,33 +237,6 @@ impl CodeGenerator {
         logic.push_str("    }\n");
 
         logic.push_str("    return 0; // EOF\n");
-        logic.push_str("}\n");
-        logic.push_str("\n");
-
-        // Main function
-        logic.push_str("int main(int argc, char *argv[]) {\n");
-        logic.push_str("    FILE *input_file = stdin;\n");
-        logic.push_str("\n");
-
-        logic.push_str("    if (argc > 1) {\n");
-        logic.push_str("        input_file = fopen(argv[1], \"r\");\n");
-        logic.push_str("        if (!input_file) {\n");
-        logic.push_str("            fprintf(stderr, \"Cannot open file %s\\n\", argv[1]);\n");
-        logic.push_str("            return 1;\n");
-        logic.push_str("        }\n");
-        logic.push_str("    }\n");
-        logic.push_str("\n");
-
-        logic.push_str("    yyin = input_file;\n");
-        logic.push_str("    yylex();\n");
-        logic.push_str("\n");
-
-        logic.push_str("    if (input_file != stdin) {\n");
-        logic.push_str("        fclose(input_file);\n");
-        logic.push_str("    }\n");
-        logic.push_str("\n");
-
-        logic.push_str("    return 0;\n");
         logic.push_str("}\n");
         logic.push_str("\n");
 

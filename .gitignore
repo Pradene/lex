@@ -1,3 +1,5 @@
 /target
 lex.yy.c
 lex
+lib/lib.o
+libl.a

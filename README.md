@@ -6,11 +6,17 @@ Generate C code from a syntax file (See examples).
 
 ## Usage
 
-Run the bash script with a syntax file or default is syntax/operation.lexer
+1. Generate and compuile the lexer code with make:
 ``` bash
-./build.sh [file]
+make
 ```
 
+2. Run the program:
+``` bash
+./lex
+```
+
+You can change the syntax file inside the Makefile
 
 ## Ressources
 

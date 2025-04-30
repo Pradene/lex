@@ -4,7 +4,6 @@ use std::io::stdout;
 
 use lex::CodeGenerator;
 use lex::LexFile;
-use lex::DFA;
 use lex::ArgsParser;
 
 fn main() -> Result<(), String> {
@@ -31,10 +30,10 @@ fn main() -> Result<(), String> {
     let input = parser.get_file();
 
     let file = LexFile::new(&input)?;
-    let dfa = DFA::new(&file)?;
+    let dfa = file.dfa()?;
 
     let generator = CodeGenerator::new(file, dfa);
-    let code = generator.generate_code();
+    let code = generator.code();
 
     writeln!(output, "{}", code).map_err(|e| format!("{}", e))?;
 
