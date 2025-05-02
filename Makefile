@@ -1,6 +1,6 @@
 # Compiler and flags
 CC = cc
-CFLAGS = -Wall -Wextra -Werror -Ilibl
+CFLAGS = -Wall -Wextra -Werror -Ilibl -g
 LDFLAGS = -L. -ll
 
 # Project structure

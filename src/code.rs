@@ -42,6 +42,11 @@ impl CodeGenerator {
         header.push_str("#include \"libl.h\"\n");
         header.push_str("#define YY_BUFFER_SIZE 16384\n");
         header.push_str("#define ECHO printf(\"%s\\n\", yytext)\n");
+        header.push_str("#define REJECT do {  \\\n");
+        header.push_str("    yy_rejected = 1; \\\n");
+        header.push_str("    goto find_rule;  \\\n");
+        header.push_str("} while (0)\n");
+        header.push_str("\n");
         header.push_str("\n");
 
         header
@@ -130,11 +135,23 @@ impl CodeGenerator {
         // Generate the token recognition and handling logic
         let mut logic = String::new();
 
+        // Define global variables for proper REJECT functionality
+        logic.push_str("// Global variables for REJECT and lexer state\n");
+        logic.push_str("static int yy_rule_index = 0; // Current rule index\n");
+        logic.push_str("static int yy_rule_count = 100; // Number of rules\n");
+        logic.push_str("static int yy_rejected = 0; // Flag indicating REJECT was called\n");
+        logic.push_str("static int yy_more_len = 0; // Length accumulated by yymore()\n");
+        logic.push_str("\n");
+
+        // Define yymore() functionality
+
         // Define yylex function which is the main scanning function
         logic.push_str("int yylex(void) {\n");
         logic.push_str("    static char *current_pos = NULL;\n");
         logic.push_str("    static char *buffer_end = NULL;\n");
         logic.push_str("    static char buffer[YY_BUFFER_SIZE];\n");
+        logic.push_str("    static char *yytext_buffer = NULL;\n");
+        logic.push_str("    static int yytext_buffer_size = 0;\n");
         logic.push_str("    char *token_start;\n");
         logic.push_str("\n");
 
@@ -153,8 +170,12 @@ impl CodeGenerator {
         logic.push_str("    StateID current_state = 0; // Start state\n");
         logic.push_str("    StateID last_accepting_state = -1;\n");
         logic.push_str("    char *last_accepting_pos = NULL;\n");
+        logic.push_str("    yy_rule_index = 0; // Start with the first rule\n");
+        logic.push_str("    yy_rejected = 0; // Reset REJECT flag\n");
+        logic.push_str("    yy_more_len = 0; // Reset yymore() accumulation\n");
         logic.push_str("\n");
 
+        logic.push_str("find_rule:\n");
         logic.push_str("    while (current_pos < buffer_end) {\n");
         logic.push_str("        unsigned char c = (unsigned char)*current_pos;\n");
         logic.push_str("        StateID next_state = transition(current_state, c);\n");
@@ -188,13 +209,31 @@ impl CodeGenerator {
         logic.push_str("    if (last_accepting_state != -1) {\n");
         logic.push_str("        // Found a match - set up yytext and yyleng\n");
         logic.push_str("        yyleng = last_accepting_pos - token_start;\n");
-        logic.push_str("        yytext = (char *)malloc(yyleng + 1);\n");
-        logic.push_str("        if (!yytext) {\n");
+        logic.push_str("\n");
+        
+        // Improved yytext allocation with support for yymore()
+        logic.push_str("        // Allocate or reallocate yytext buffer if needed\n");
+        logic.push_str("        int total_len = yy_more_len + yyleng;\n");
+        logic.push_str("        if (yytext_buffer == NULL || total_len + 1 > yytext_buffer_size) {\n");
+        logic.push_str("            int new_size = total_len + 1 + 128; // Some extra space\n");
+        logic.push_str("            if (yytext_buffer) {\n");
+        logic.push_str("                yytext_buffer = (char *)realloc(yytext_buffer, new_size);\n");
+        logic.push_str("            } else {\n");
+        logic.push_str("                yytext_buffer = (char *)malloc(new_size);\n");
+        logic.push_str("            }\n");
+        logic.push_str("            yytext_buffer_size = new_size;\n");
+        logic.push_str("        }\n");
+        logic.push_str("\n");
+        logic.push_str("        if (!yytext_buffer) {\n");
         logic.push_str("            fprintf(stderr, \"Out of memory allocating yytext\\n\");\n");
         logic.push_str("            exit(1);\n");
         logic.push_str("        }\n");
-        logic.push_str("        memcpy(yytext, token_start, yyleng);\n");
-        logic.push_str("        yytext[yyleng] = '\\0';\n");
+        logic.push_str("\n");
+        logic.push_str("        // Copy new text to yytext (after any text kept by yymore())\n");
+        logic.push_str("        memcpy(yytext_buffer + yy_more_len, token_start, yyleng);\n");
+        logic.push_str("        yytext_buffer[total_len] = '\\0';\n");
+        logic.push_str("        yytext = yytext_buffer;\n");
+        logic.push_str("        yyleng = total_len; // Update yyleng to include yymore text\n");
         logic.push_str("\n");
 
         logic.push_str("        // Reposition the current_pos to where we accepted\n");
@@ -204,12 +243,31 @@ impl CodeGenerator {
         logic.push_str("        // Execute the associated action\n");
         logic.push_str("        execute_action(last_accepting_state);\n");
         logic.push_str("\n");
+        
+        // Handle REJECT - try other rules
+        logic.push_str("        // Handle REJECT macro effects\n");
+        logic.push_str("        if (yy_rejected) {\n");
+        logic.push_str("            // When REJECT is called, try the next rule\n");
+        logic.push_str("            yy_rule_index++; // Try next rule\n");
+        logic.push_str("            yy_rejected = 0;\n");
+        logic.push_str("\n");
+        logic.push_str("            // If we've exhausted all rules\n");
+        logic.push_str("            if (yy_rule_index >= yy_rule_count) {\n");
+        logic.push_str("                fprintf(stderr, \"REJECT failed - no more rules to try\\n\");\n");
+        logic.push_str("                // Reset and continue as if no match\n");
+        logic.push_str("                current_pos = token_start + 1;\n");
+        logic.push_str("                goto yylex_restart;\n");
+        logic.push_str("            }\n");
+        logic.push_str("\n");
+        logic.push_str("            // Reset position and try next rule\n");
+        logic.push_str("            current_pos = token_start;\n");
+        logic.push_str("            goto find_rule;\n");
+        logic.push_str("        }\n");
+        logic.push_str("\n");
 
-        logic.push_str(
-            "        // Free yytext before returning since the action should have consumed it\n",
-        );
-        logic.push_str("        free(yytext);\n");
-        logic.push_str("        yytext = NULL;\n");
+        // Reset yytext and more_len if not using REJECT or yymore
+        logic.push_str("        // Reset yytext and yymore state for next token\n");
+        logic.push_str("        yy_more_len = 0;\n");
         logic.push_str("\n");
 
         logic.push_str("        // Return to get the next token\n");
@@ -230,6 +288,9 @@ impl CodeGenerator {
         logic.push_str("        goto yylex_restart;\n");
         logic.push_str("    }\n");
         logic.push_str("\n");
+
+        logic.push_str("    free(yytext);\n");
+        logic.push_str("    yytext = NULL;\n");
 
         logic.push_str("    return 0; // EOF\n");
         logic.push_str("}\n");

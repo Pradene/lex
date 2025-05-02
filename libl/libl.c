@@ -14,7 +14,10 @@ __attribute__((weak)) int main(int argc, char* argv[]) {
     yyin = stdin;
     if (argc > 1) {
         yyin = fopen(argv[1], "r");
-        if (yyin != 0) return 1;
+        if (yyin == NULL) {
+            printf("Error: can't open %s\n", argv[1]);
+            return 1;
+        }
     }
 
     while(yylex() != 0) ;
