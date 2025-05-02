@@ -49,6 +49,6 @@ COMMENT     \/\/.*
 
 "\n"        printf("NEWLINE\n");
 "\t"        printf("TAB\n");
-// [[:blank:]] { /* ignore whitespaces */ }
+[[:blank:]] { /* ignore whitespaces */ }
 .           { printf("UNRECOGNIZED: %s\n", yytext); }
 

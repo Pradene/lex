@@ -40,11 +40,8 @@ impl CodeGenerator {
         }
 
         header.push_str("#include \"libl.h\"\n");
-        header.push_str("\n");
-
         header.push_str("#define YY_BUFFER_SIZE 16384\n");
-        header.push_str("\n");
-
+        header.push_str("#define ECHO printf(\"%s\\n\", yytext)\n");
         header.push_str("\n");
 
         header
@@ -70,7 +67,7 @@ impl CodeGenerator {
             // Find all transitions from this state
             for ((from_state, symbol), to_state) in &self.dfa.transitions {
                 if from_state == state {
-                    if let crate::Symbol::Char(ch) = symbol {
+                    if let crate::TransitionSymbol::Char(ch) = symbol {
                         // Use ASCII code instead of character literal
                         let ascii_code = *ch as u8;
                         table_code.push_str(&format!(
@@ -232,6 +229,7 @@ impl CodeGenerator {
         logic.push_str("        current_pos++; // Skip invalid character\n");
         logic.push_str("        goto yylex_restart;\n");
         logic.push_str("    }\n");
+        logic.push_str("\n");
 
         logic.push_str("    return 0; // EOF\n");
         logic.push_str("}\n");

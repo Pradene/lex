@@ -5,13 +5,13 @@ use std::fmt;
 use crate::Action;
 use crate::Regex;
 use crate::StateID;
-use crate::Symbol;
+use crate::TransitionSymbol;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NFA {
     pub states: BTreeSet<StateID>,
     pub alphabet: BTreeSet<char>,
-    pub transitions: BTreeMap<(StateID, Symbol), BTreeSet<StateID>>,
+    pub transitions: BTreeMap<(StateID, TransitionSymbol), BTreeSet<StateID>>,
     pub start_state: StateID,
     pub final_states: BTreeSet<StateID>,
     pub actions: BTreeMap<StateID, Action>,
@@ -108,18 +108,18 @@ impl NFA {
         self.actions.insert(state, action);
     }
 
-    fn add_transition(&mut self, from: StateID, symbol: Symbol, to: StateID) {
+    fn add_transition(&mut self, from: StateID, symbol: TransitionSymbol, to: StateID) {
         self.transitions
             .entry((from, symbol.clone()))
             .or_insert(BTreeSet::new())
             .insert(to);
 
         match symbol {
-            Symbol::Epsilon => {}
-            Symbol::Char(c) => {
+            TransitionSymbol::Epsilon => {}
+            TransitionSymbol::Char(c) => {
                 self.alphabet.insert(c);
             }
-            Symbol::CharClass(class) => {
+            TransitionSymbol::CharClass(class) => {
                 for &c in &class {
                     self.alphabet.insert(c);
                 }
@@ -134,7 +134,7 @@ impl NFA {
 
         nfa.start_state = start;
         nfa.final_states.insert(end);
-        nfa.add_transition(start, Symbol::Epsilon, end);
+        nfa.add_transition(start, TransitionSymbol::Epsilon, end);
 
         nfa
     }
@@ -146,7 +146,7 @@ impl NFA {
 
         nfa.start_state = start;
         nfa.final_states.insert(end);
-        nfa.add_transition(start, Symbol::Char(c), end);
+        nfa.add_transition(start, TransitionSymbol::Char(c), end);
 
         nfa
     }
@@ -158,7 +158,7 @@ impl NFA {
 
         nfa.start_state = start;
         nfa.final_states.insert(end);
-        nfa.add_transition(start, Symbol::CharClass(chars), end);
+        nfa.add_transition(start, TransitionSymbol::CharClass(chars), end);
 
         nfa
     }
@@ -224,7 +224,7 @@ impl NFA {
         for &final_state in &first.final_states {
             nfa.add_transition(
                 first_map[&final_state],
-                Symbol::Epsilon,
+                TransitionSymbol::Epsilon,
                 second_map[&second.start_state],
             );
         }
@@ -277,8 +277,8 @@ impl NFA {
             }
         }
 
-        nfa.add_transition(start, Symbol::Epsilon, first_map[&first.start_state]);
-        nfa.add_transition(start, Symbol::Epsilon, second_map[&second.start_state]);
+        nfa.add_transition(start, TransitionSymbol::Epsilon, first_map[&first.start_state]);
+        nfa.add_transition(start, TransitionSymbol::Epsilon, second_map[&second.start_state]);
 
         for ((from, symbol), to_states) in &first.transitions {
             for &to in to_states {
@@ -325,12 +325,12 @@ impl NFA {
         let end = nfa.add_state();
         nfa.final_states.insert(end);
 
-        nfa.add_transition(start, Symbol::Epsilon, map[&inner.start_state]);
-        nfa.add_transition(start, Symbol::Epsilon, end);
+        nfa.add_transition(start, TransitionSymbol::Epsilon, map[&inner.start_state]);
+        nfa.add_transition(start, TransitionSymbol::Epsilon, end);
 
         for &finite in &inner.final_states {
-            nfa.add_transition(map[&finite], Symbol::Epsilon, map[&inner.start_state]);
-            nfa.add_transition(map[&finite], Symbol::Epsilon, end);
+            nfa.add_transition(map[&finite], TransitionSymbol::Epsilon, map[&inner.start_state]);
+            nfa.add_transition(map[&finite], TransitionSymbol::Epsilon, end);
         }
 
         nfa.alphabet.extend(inner.alphabet.iter());
@@ -366,11 +366,11 @@ impl NFA {
             }
         }
 
-        nfa.add_transition(start, Symbol::Epsilon, end);
-        nfa.add_transition(start, Symbol::Epsilon, map[&inner.start_state]);
+        nfa.add_transition(start, TransitionSymbol::Epsilon, end);
+        nfa.add_transition(start, TransitionSymbol::Epsilon, map[&inner.start_state]);
 
         for &finite in &inner.final_states {
-            nfa.add_transition(map[&finite], Symbol::Epsilon, end);
+            nfa.add_transition(map[&finite], TransitionSymbol::Epsilon, end);
         }
 
         nfa.alphabet.extend(inner.alphabet.iter());
@@ -416,7 +416,7 @@ impl NFA {
         let mut stack: Vec<StateID> = states.iter().cloned().collect();
 
         while let Some(state) = stack.pop() {
-            if let Some(next_states) = self.transitions.get(&(state, Symbol::Epsilon)) {
+            if let Some(next_states) = self.transitions.get(&(state, TransitionSymbol::Epsilon)) {
                 for &next in next_states {
                     if closure.insert(next) {
                         stack.push(next);

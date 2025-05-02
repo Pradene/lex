@@ -3,13 +3,13 @@ use std::convert::From;
 use std::default::Default;
 use std::fmt;
 
-use crate::{Action, StateID, Symbol, NFA};
+use crate::{Action, StateID, TransitionSymbol, NFA};
 
 #[derive(Debug, Clone)]
 pub struct DFA {
     pub states: BTreeSet<StateID>,
     pub alphabet: BTreeSet<char>,
-    pub transitions: BTreeMap<(StateID, Symbol), StateID>,
+    pub transitions: BTreeMap<(StateID, TransitionSymbol), StateID>,
     pub start_state: StateID,
     pub final_states: BTreeSet<StateID>,
     pub actions: BTreeMap<StateID, Action>,
@@ -79,12 +79,12 @@ impl From<NFA> for DFA {
                 let mut next_nfa_states = BTreeSet::new();
 
                 for &nfa_state in &current_nfa_states {
-                    if let Some(targets) = nfa.transitions.get(&(nfa_state, Symbol::Char(symbol))) {
+                    if let Some(targets) = nfa.transitions.get(&(nfa_state, TransitionSymbol::Char(symbol))) {
                         next_nfa_states.extend(targets);
                     }
                     for ((src, sym), targets) in &nfa.transitions {
                         if *src == nfa_state {
-                            if let Symbol::CharClass(char_set) = sym {
+                            if let TransitionSymbol::CharClass(char_set) = sym {
                                 if char_set.contains(&symbol) {
                                     next_nfa_states.extend(targets);
                                 }
@@ -130,7 +130,7 @@ impl From<NFA> for DFA {
                 };
 
                 dfa.transitions
-                    .insert((current_dfa_state, Symbol::Char(symbol)), target_dfa_state);
+                    .insert((current_dfa_state, TransitionSymbol::Char(symbol)), target_dfa_state);
             }
         }
 
@@ -167,7 +167,7 @@ impl DFA {
                 break;
             }
 
-            match self.transitions.get(&(current_state, Symbol::Char(c))) {
+            match self.transitions.get(&(current_state, TransitionSymbol::Char(c))) {
                 Some(&next_state) => {
                     current_state = next_state;
                     if self.final_states.contains(&current_state) {

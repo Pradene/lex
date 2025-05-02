@@ -4,12 +4,11 @@ DIGIT       [0-9]+\.?[0-9]*
 
 {DIGIT}     printf("NUMBER: %s\n", yytext);
 "+"         |
-"-"         |
-"*"         |
-"/"         {
+"-"         printf("OPERATOR: %s\n", yytext);
+[*/]        {
     printf("OPERATOR: %s\n", yytext);
 }
-"="         printf("EQUAL\n");
+"="         ECHO;
 "("         printf("OPEN PARENTHESIS\n");
 ")"         printf("CLOSED PARENTHESIS\n");
 "\n"        printf("NEWLINE\n");
