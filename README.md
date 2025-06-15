@@ -6,7 +6,7 @@ Generate C code from a syntax file (See examples).
 
 ## Usage
 
-1. Generate and compuile the lexer code with make:
+1. Generate and compile the lexer code with make:
 ``` bash
 make
 ```
