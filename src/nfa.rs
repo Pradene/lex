@@ -81,9 +81,7 @@ impl From<Regex> for NFA {
 
 impl NFA {
     pub fn new(string: &String) -> Result<NFA, String> {
-        let nfa = NFA::from(
-            Regex::new(string).map_err(|e| format!("{} : {}", string, e))?
-        );
+        let nfa = NFA::from(Regex::new(string).map_err(|e| format!("{} : {}", string, e))?);
 
         Ok(nfa)
     }
@@ -122,6 +120,18 @@ impl NFA {
             TransitionSymbol::CharClass(class) => {
                 for &c in &class {
                     self.alphabet.insert(c);
+                }
+            }
+            TransitionSymbol::NegatedCharClass(class) => {
+                for i in 0..256 {
+                    match char::from_u32(i) {
+                        Some(c) => {
+                            if !class.contains(&c) {
+                                self.alphabet.insert(c);
+                            }
+                        }
+                        None => {}
+                    }
                 }
             }
         }
@@ -277,8 +287,16 @@ impl NFA {
             }
         }
 
-        nfa.add_transition(start, TransitionSymbol::Epsilon, first_map[&first.start_state]);
-        nfa.add_transition(start, TransitionSymbol::Epsilon, second_map[&second.start_state]);
+        nfa.add_transition(
+            start,
+            TransitionSymbol::Epsilon,
+            first_map[&first.start_state],
+        );
+        nfa.add_transition(
+            start,
+            TransitionSymbol::Epsilon,
+            second_map[&second.start_state],
+        );
 
         for ((from, symbol), to_states) in &first.transitions {
             for &to in to_states {
@@ -329,7 +347,11 @@ impl NFA {
         nfa.add_transition(start, TransitionSymbol::Epsilon, end);
 
         for &finite in &inner.final_states {
-            nfa.add_transition(map[&finite], TransitionSymbol::Epsilon, map[&inner.start_state]);
+            nfa.add_transition(
+                map[&finite],
+                TransitionSymbol::Epsilon,
+                map[&inner.start_state],
+            );
             nfa.add_transition(map[&finite], TransitionSymbol::Epsilon, end);
         }
 

@@ -9,7 +9,6 @@ pub enum Regex {
     Dot,
     StartAnchor, // ^ at start of regex
     EndAnchor,   // $ at end of regex
-
     Union(Box<Regex>, Box<Regex>),
     Concat(Box<Regex>, Box<Regex>),
     Option(Box<Regex>),

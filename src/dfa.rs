@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::convert::From;
 use std::default::Default;
 use std::fmt;
@@ -9,8 +9,8 @@ use crate::{Action, StateID, TransitionSymbol, NFA};
 pub struct DFA {
     pub states: BTreeSet<StateID>,
     pub alphabet: BTreeSet<char>,
-    pub transitions: BTreeMap<(StateID, TransitionSymbol), StateID>,
-    pub start_state: StateID,
+    pub transitions: BTreeMap<(StateID, char), StateID>,
+    pub initial_state: StateID,
     pub final_states: BTreeSet<StateID>,
     pub actions: BTreeMap<StateID, Action>,
 }
@@ -21,7 +21,7 @@ impl Default for DFA {
             states: BTreeSet::new(),
             alphabet: BTreeSet::new(),
             transitions: BTreeMap::new(),
-            start_state: 0,
+            initial_state: 0,
             final_states: BTreeSet::new(),
             actions: BTreeMap::new(),
         }
@@ -37,7 +37,7 @@ impl fmt::Display for DFA {
         let alphabet: String = self.alphabet.iter().collect();
         writeln!(f, "Alphabet: {}", alphabet)?;
 
-        writeln!(f, "Start StateID: {:?}", self.start_state)?;
+        writeln!(f, "Start StateID: {:?}", self.initial_state)?;
 
         writeln!(f, "Finite States: {:?}", self.final_states)?;
 
@@ -66,7 +66,7 @@ impl From<NFA> for DFA {
 
         state_map.insert(start_set.clone(), dfa_state_counter);
         dfa.states.insert(dfa_state_counter);
-        dfa.start_state = dfa_state_counter;
+        dfa.initial_state = dfa_state_counter;
 
         dfa_state_counter += 1;
         let mut queue = VecDeque::new();
@@ -79,7 +79,10 @@ impl From<NFA> for DFA {
                 let mut next_nfa_states = BTreeSet::new();
 
                 for &nfa_state in &current_nfa_states {
-                    if let Some(targets) = nfa.transitions.get(&(nfa_state, TransitionSymbol::Char(symbol))) {
+                    if let Some(targets) = nfa
+                        .transitions
+                        .get(&(nfa_state, TransitionSymbol::Char(symbol)))
+                    {
                         next_nfa_states.extend(targets);
                     }
                     for ((src, sym), targets) in &nfa.transitions {
@@ -130,11 +133,11 @@ impl From<NFA> for DFA {
                 };
 
                 dfa.transitions
-                    .insert((current_dfa_state, TransitionSymbol::Char(symbol)), target_dfa_state);
+                    .insert((current_dfa_state, symbol), target_dfa_state);
             }
         }
 
-        dfa
+        dfa.minimize()
     }
 }
 
@@ -157,7 +160,7 @@ impl DFA {
     }
 
     fn scan_next_token(&self, input: &str) -> (String, Action, String) {
-        let mut current_state = self.start_state;
+        let mut current_state = self.initial_state;
         let mut last_accepting_state = None;
         let mut last_accepting_length = 0;
 
@@ -167,7 +170,7 @@ impl DFA {
                 break;
             }
 
-            match self.transitions.get(&(current_state, TransitionSymbol::Char(c))) {
+            match self.transitions.get(&(current_state, c)) {
                 Some(&next_state) => {
                     current_state = next_state;
                     if self.final_states.contains(&current_state) {
@@ -195,9 +198,107 @@ impl DFA {
     }
 
     pub fn minimize(&self) -> DFA {
-        // Implementation of DFA minimization algorithm (Hopcroft's algorithm)
-        // This would reduce the number of states in the DFA
+        // Step 1: Initialize partition with accepting and rejecting states
+        let mut partition: Vec<BTreeSet<usize>> = Vec::new();
 
-        self.clone()
+        let reject_states: BTreeSet<usize> = self
+            .states
+            .difference(&self.final_states)
+            .cloned()
+            .collect();
+        if !reject_states.is_empty() {
+            partition.push(reject_states);
+        }
+
+        // Separate accepting states by their ACTION
+        let mut action_groups: BTreeMap<String, BTreeSet<usize>> = BTreeMap::new();
+        for &state in &self.final_states {
+            if let Some(action) = self.actions.get(&state) {
+                action_groups
+                    .entry(action.clone())
+                    .or_insert_with(BTreeSet::new)
+                    .insert(state);
+            }
+        }
+
+        for (_, group) in action_groups {
+            partition.push(group);
+        }
+
+        // Step 2: Refine partition iteratively
+        loop {
+            let mut new_partition: Vec<BTreeSet<usize>> = Vec::new();
+            for group in &partition {
+                let mut subgroups: HashMap<Vec<usize>, BTreeSet<usize>> = HashMap::new();
+                for &state in group {
+                    let mut signature: Vec<usize> = Vec::new();
+                    for symbol in &self.alphabet {
+                        if let Some(&target) = self.transitions.get(&(state, *symbol)) {
+                            let target_group = partition
+                                .iter()
+                                .position(|g| g.contains(&target))
+                                .unwrap_or(0);
+                            signature.push(target_group);
+                        } else {
+                            signature.push(usize::MAX);
+                        }
+                    }
+                    subgroups
+                        .entry(signature)
+                        .or_insert_with(BTreeSet::new)
+                        .insert(state);
+                }
+                for (_, subgroup) in subgroups {
+                    new_partition.push(subgroup);
+                }
+            }
+            if partition == new_partition {
+                break;
+            }
+            partition = new_partition;
+        }
+
+        // Step 3: Build minimized DFA
+        let mut state_to_group: BTreeMap<usize, usize> = BTreeMap::new();
+        for (group_idx, group) in partition.iter().enumerate() {
+            for &state in group {
+                state_to_group.insert(state, group_idx);
+            }
+        }
+
+        let new_states: BTreeSet<usize> = (0..partition.len()).collect();
+
+        // Build new transitions
+        let mut new_transitions: BTreeMap<(usize, char), usize> = BTreeMap::new();
+        for (&(old_state, symbol), &target) in &self.transitions {
+            let new_state = state_to_group[&old_state];
+            let new_target = state_to_group[&target];
+            new_transitions.insert((new_state, symbol), new_target);
+        }
+
+        // Map initial and final states
+        let new_initial = state_to_group[&self.initial_state];
+        let new_finals = self
+            .final_states
+            .iter()
+            .map(|&s| state_to_group[&s])
+            .collect::<BTreeSet<_>>();
+
+        // Remap actions to use new state indices
+        let mut new_actions: BTreeMap<usize, String> = BTreeMap::new();
+        for (&old_state, action) in &self.actions {
+            if let Some(&new_state) = state_to_group.get(&old_state) {
+                new_actions.insert(new_state, action.clone());
+            }
+        }
+
+        DFA {
+            actions: new_actions,
+            states: new_states,
+            alphabet: self.alphabet.clone(),
+            transitions: new_transitions,
+            initial_state: new_initial,
+            final_states: new_finals,
+        }
     }
 }

@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs};
 
-use crate::{NFA, DFA, Regex};
+use crate::{Regex, DFA, NFA};
 
 pub enum LexSection {
     Definitions,
@@ -47,16 +47,16 @@ impl LexFile {
 
     pub fn dfa(&self) -> Result<DFA, String> {
         let mut combined_nfa = NFA::empty();
-        
+
         for rule in &self.rules {
             let regex = Regex::new(&rule.pattern)
                 .map_err(|e| format!("Invalid pattern '{}': {}", rule.pattern, e))?;
-            
+
             let mut fragment = NFA::from(regex);
             for state in fragment.final_states.clone() {
                 fragment.add_action(state, rule.action.clone());
             }
-            
+
             combined_nfa = NFA::union(combined_nfa, fragment);
         }
 
@@ -123,10 +123,12 @@ impl<'a> LexParser<'a> {
         match self.current_section {
             LexSection::Definitions => self.current_section = LexSection::Rules,
             LexSection::Rules => self.current_section = LexSection::Code,
-            LexSection::Code => return Err(format!(
-                "Unexpected section separator at line {}",
-                self.line_index + 1
-            )),
+            LexSection::Code => {
+                return Err(format!(
+                    "Unexpected section separator at line {}",
+                    self.line_index + 1
+                ))
+            }
         }
         Ok(())
     }
@@ -145,7 +147,7 @@ impl<'a> LexParser<'a> {
 
     fn process_definitions_code_block(&mut self) -> Result<(), String> {
         self.line_index += 1; // Skip opening %{
-        
+
         while self.line_index < self.lines.len() {
             let line = self.lines[self.line_index];
             if line.trim().starts_with("%}") {
@@ -160,11 +162,13 @@ impl<'a> LexParser<'a> {
     }
 
     fn process_definition(&mut self, line: &str, line_number: usize) -> Result<(), String> {
-        let (name, value) = line.split_once(' ')
+        let (name, value) = line
+            .split_once(' ')
             .ok_or_else(|| format!("{}:{}: Invalid definition format", self.path, line_number))?;
 
         let expanded_value = self.expand_macros(value.trim())?;
-        self.definitions.insert(name.trim().to_string(), expanded_value);
+        self.definitions
+            .insert(name.trim().to_string(), expanded_value);
         Ok(())
     }
 
@@ -183,7 +187,10 @@ impl<'a> LexParser<'a> {
         line_number: usize,
     ) -> Result<(), String> {
         if action == "|" {
-            self.pending_patterns.push(PendingPattern { pattern, line_number });
+            self.pending_patterns.push(PendingPattern {
+                pattern,
+                line_number,
+            });
             return Ok(());
         }
 
@@ -203,7 +210,10 @@ impl<'a> LexParser<'a> {
         let mut brace_count = action.chars().filter(|c| *c == '{').count() as i32;
         brace_count -= action.chars().filter(|c| *c == '}').count() as i32;
 
-        self.pending_patterns.push(PendingPattern { pattern, line_number });
+        self.pending_patterns.push(PendingPattern {
+            pattern,
+            line_number,
+        });
         let mut current_line = self.line_index;
 
         while brace_count > 0 && current_line < self.lines.len() - 1 {
@@ -217,7 +227,10 @@ impl<'a> LexParser<'a> {
         }
 
         if brace_count != 0 {
-            return Err(format!("{}: Unclosed action block starting at line {}", self.path, line_number));
+            return Err(format!(
+                "{}: Unclosed action block starting at line {}",
+                self.path, line_number
+            ));
         }
 
         self.line_index = current_line;
@@ -231,7 +244,12 @@ impl<'a> LexParser<'a> {
         Ok(())
     }
 
-    fn commit_rule(&mut self, pattern: String, action: String, _line_number: usize) -> Result<(), String> {
+    fn commit_rule(
+        &mut self,
+        pattern: String,
+        action: String,
+        _line_number: usize,
+    ) -> Result<(), String> {
         if !self.pending_patterns.is_empty() {
             self.commit_pending_rules(action.clone())?;
         }
@@ -298,8 +316,10 @@ impl PatternParser {
 
     fn parse(mut self, line: &str) -> Result<(String, String), String> {
         for (i, c) in line.char_indices() {
-            if self.handle_escape(c) { continue; }
-            
+            if self.handle_escape(c) {
+                continue;
+            }
+
             match c {
                 '[' if !self.in_quote => self.in_bracket += 1,
                 ']' if !self.in_quote => self.in_bracket = (self.in_bracket - 1).max(0),
@@ -334,7 +354,7 @@ impl PatternParser {
             Some(pos) => {
                 let pattern = line[..pos].trim();
                 let action = line[pos..].trim();
-                
+
                 if pattern.is_empty() {
                     Err("Empty pattern in rule".into())
                 } else {
@@ -350,6 +370,10 @@ impl Rule {
     pub fn new(pattern: String, action: String) -> Result<Rule, String> {
         let nfa = NFA::new(&pattern)
             .map_err(|e| format!("Invalid regex pattern '{}': {}", pattern, e))?;
-        Ok(Rule { pattern, nfa, action })
+        Ok(Rule {
+            pattern,
+            nfa,
+            action,
+        })
     }
 }

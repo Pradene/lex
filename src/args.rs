@@ -1,7 +1,7 @@
 use std::env;
 
 pub struct ArgsParser {
-    args: Vec<String>
+    args: Vec<String>,
 }
 
 impl ArgsParser {
@@ -11,7 +11,7 @@ impl ArgsParser {
         Self { args }
     }
 
-    // Parse arugment in a window of size 2 
+    // Parse arugment in a window of size 2
     // Format:
     //   0: option
     //   1: value

@@ -1,10 +1,11 @@
-use std::fs::File;
-use std::io::Write;
-use std::io::stdout;
+use std::{
+    fs::File,
+    io::{stdout, Write},
+};
 
+use lex::ArgsParser;
 use lex::CodeGenerator;
 use lex::LexFile;
-use lex::ArgsParser;
 
 fn main() -> Result<(), String> {
     let parser = ArgsParser::new();
@@ -12,9 +13,6 @@ fn main() -> Result<(), String> {
     if parser.args().len() < 2 {
         return Err("usage: program [options] file".to_string());
     }
-    
-    // let language = parser.get_argument("--language", "c");
-    // println!("language: {}", language);
 
     let mut output: Box<dyn Write> = if !parser.has_flag("-t") {
         let filename = "lex.yy.c";
@@ -26,7 +24,7 @@ fn main() -> Result<(), String> {
     } else {
         Box::new(stdout())
     };
-    
+
     let input = parser.get_file();
 
     let file = LexFile::new(&input)?;

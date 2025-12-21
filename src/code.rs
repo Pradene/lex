@@ -6,31 +6,25 @@ pub struct CodeGenerator {
 }
 
 impl CodeGenerator {
-    pub fn new(file: LexFile, dfa: DFA) -> Self {        
+    pub fn new(file: LexFile, dfa: DFA) -> Self {
         CodeGenerator { file, dfa }
     }
 
     pub fn code(&self) -> String {
         let mut code = String::new();
 
-        // Add user-defined code sections from the lexer file
         code.push_str(&self.generate_header());
-
-        // Generate the transition table for the DFA
-        code.push_str(&self.generate_transition_table());
-
-        // Generate the token recognition logic with yytext and yyleng
+        code.push_str(&self.generate_transition_table()); // REPLACE OLD METHOD
+        code.push_str(&self.generate_accepting_states()); // NEW: separate concern
+        code.push_str(&self.generate_pattern_info()); // NEW: separate concern
+        code.push_str(&self.generate_actions()); // NEW: separate concern
         code.push_str(&self.generate_token_logic());
-
-        // Add user-defined code from the lexer file
         code.push_str(&self.file.code);
 
         code
     }
 
     fn generate_header(&self) -> String {
-        // Generate the header part of the lexer code
-        // This includes standard includes, types, etc.
         let mut header = String::new();
 
         println!("{:?}", self.file.definitions_code);
@@ -42,154 +36,180 @@ impl CodeGenerator {
         header.push_str("#include \"libl.h\"\n");
         header.push_str("#define YY_BUFFER_SIZE 16384\n");
         header.push_str("#define ECHO printf(\"%s\\n\", yytext)\n");
-        header.push_str("static int yy_rejected = 0; // Flag indicating REJECT was called\n");
-        header.push_str("#define REJECT do {  \\\n");
-        header.push_str("    yy_rejected = 1; \\\n");
-        header.push_str("    return ;  \\\n");
-        header.push_str("} while (0)\n");
-        header.push_str("\n");
+        header.push_str("static int yy_rejected = 0;\n");
+        header.push_str("#define REJECT do { yy_rejected = 1; return; } while (0)\n");
         header.push_str("\n");
 
         header
     }
 
     fn generate_transition_table(&self) -> String {
-        // Generate code for the DFA transition table
         let mut table_code = String::new();
 
-        // Define state type
+        // Determine table dimensions
+        let max_state = self.dfa.states.iter().max().copied().unwrap_or(0);
+        let num_states = max_state + 1;
+
+        table_code.push_str("// ===== DFA Transition Table (2D Array) =====\n");
+        table_code.push_str("// Format: transition_table[state][character] = next_state\n");
+        table_code.push_str("// Use -1 to indicate no valid transition (error state)\n");
+        table_code.push_str("// Lookup time: O(1) - just one array access!\n\n");
+
         table_code.push_str("typedef int StateID;\n");
+        table_code.push_str(&format!("#define NUM_STATES {}\n", num_states));
         table_code.push_str("\n");
 
-        // Generate the transition table as a 2D array or switch statement
-        table_code.push_str("static StateID transition(StateID state, unsigned char c) {\n");
-        table_code.push_str("    switch(state) {\n");
+        // Create the 2D array
+        table_code.push_str(&format!(
+            "static StateID transition_table[{}][256] = {{\n",
+            num_states
+        ));
 
-        // For each state, generate its transitions
-        for state in &self.dfa.states {
-            table_code.push_str(&format!("    case {}:\n", state));
-            table_code.push_str("        switch(c) {\n");
+        // For each state, generate a row of 256 entries
+        for state in 0..num_states {
+            // Initialize entire row to -1 (error)
+            let mut row = vec![-1i32; 256];
 
-            // Find all transitions from this state
-            for ((from_state, symbol), to_state) in &self.dfa.transitions {
-                if from_state == state {
-                    if let crate::TransitionSymbol::Char(ch) = symbol {
-                        // Use ASCII code instead of character literal
-                        let ascii_code = *ch as u8;
-                        table_code.push_str(&format!(
-                            "            case {}: // {}\n",
-                            ascii_code,
-                            char_description(*ch)
-                        ));
-                        table_code.push_str(&format!("                return {};\n", to_state));
+            // Fill in actual transitions for this state
+            if self.dfa.states.contains(&state) {
+                for ((from_state, symbol), to_state) in &self.dfa.transitions {
+                    if *from_state == state {
+                        let ascii_code = *symbol as u8 as usize;
+                        row[ascii_code] = *to_state as i32;
                     }
                 }
             }
 
-            table_code.push_str("            default:\n");
-            table_code.push_str("                return -1; // Error state\n");
-            table_code.push_str("        }\n");
+            // Write state label
+            table_code.push_str(&format!("    {{ // State {}\n", state));
+
+            // Write 16 entries per line for readability
+            // This creates chunks like: [0x00-0x0F], [0x10-0x1F], etc.
+            for (i, chunk) in row.chunks(16).enumerate() {
+                table_code.push_str("        ");
+                for (j, &val) in chunk.iter().enumerate() {
+                    if val == -1 {
+                        table_code.push_str("  -1");
+                    } else {
+                        table_code.push_str(&format!("   {}", val));
+                    }
+                    if i * 16 + j < 255 {
+                        table_code.push(',');
+                    }
+                }
+                table_code.push_str(&format!("  // 0x{:02X}-0x{:02X}\n", i * 16, i * 16 + 15));
+            }
+
+            table_code.push_str("    },\n");
         }
 
-        table_code.push_str("    default:\n");
-        table_code.push_str("        return -1; // Error state\n");
-        table_code.push_str("    }\n");
-        table_code.push_str("}\n");
-        table_code.push_str("\n");
-
-        // Generate final states check
-        table_code.push_str("static int is_accepting(StateID state) {\n");
-        table_code.push_str("    switch(state) {\n");
-
-        for state in &self.dfa.final_states {
-            table_code.push_str(&format!("    case {}:\n", state));
-            table_code.push_str("        return 1;\n");
-        }
-
-        table_code.push_str("    default:\n");
-        table_code.push_str("        return 0;\n");
-        table_code.push_str("    }\n");
-        table_code.push_str("}\n");
-        table_code.push_str("\n");
-
-        // Structure to associate state with pattern/rule ID
-        table_code.push_str("struct PatternInfo {\n");
-        table_code.push_str("    int pattern_id;\n");
-        table_code.push_str("    int priority;\n");
         table_code.push_str("};\n\n");
 
-        // Generate mapping from state to rule/pattern ID and priority
-        table_code.push_str("static struct PatternInfo get_pattern_info(StateID state) {\n");
-        table_code.push_str("    struct PatternInfo info = {-1, -1};\n");
-        table_code.push_str("    switch(state) {\n");
-
-        // Assign a pattern ID and priority for each final state
-        // Priority should be based on the rule order (earlier rules have higher priority)
-        let mut pattern_id = 0;
-        for state in &self.dfa.final_states {
-            table_code.push_str(&format!("    case {}:\n", state));
-            table_code.push_str(&format!("        info.pattern_id = {};\n", pattern_id));
-            // Higher priority for earlier patterns (reverse of pattern_id)
-            table_code.push_str(&format!("        info.priority = {};\n", self.dfa.final_states.len() - pattern_id));
-            table_code.push_str("        break;\n");
-            pattern_id += 1;
-        }
-
+        // Generate ultra-fast lookup function
+        table_code.push_str("// Ultra-fast transition lookup: O(1) constant time\n");
+        table_code.push_str("static inline StateID transition(StateID state, unsigned char c) {\n");
+        table_code.push_str("    if (state < 0 || state >= NUM_STATES) {\n");
+        table_code.push_str("        return -1;\n");
         table_code.push_str("    }\n");
-        table_code.push_str("    return info;\n");
+        table_code.push_str("    return transition_table[state][c];\n");
         table_code.push_str("}\n\n");
-
-        // Generate function to execute the correct action based on state
-        table_code.push_str("static void execute_action(StateID state) {\n");
-        table_code.push_str("    switch(state) {\n");
-
-        for (state, action) in &self.dfa.actions {
-            table_code.push_str(&format!("    case {}:\n", state));
-            table_code.push_str(&format!("        {}\n", action));
-            table_code.push_str("        break;\n");
-        }
-
-        table_code.push_str("    default:\n");
-        table_code.push_str("        // No action for this state\n");
-        table_code.push_str("        break;\n");
-        table_code.push_str("    }\n");
-        table_code.push_str("}\n");
-        table_code.push_str("\n");
 
         table_code
     }
 
+    fn generate_accepting_states(&self) -> String {
+        let mut code = String::new();
+
+        code.push_str("// Check if a state is accepting (final)\n");
+        code.push_str("static inline int is_accepting(StateID state) {\n");
+        code.push_str("    switch(state) {\n");
+
+        for state in &self.dfa.final_states {
+            code.push_str(&format!("    case {}:\n", state));
+            code.push_str("        return 1;\n");
+        }
+
+        code.push_str("    default:\n");
+        code.push_str("        return 0;\n");
+        code.push_str("    }\n");
+        code.push_str("}\n\n");
+
+        code
+    }
+
+    fn generate_pattern_info(&self) -> String {
+        let mut code = String::new();
+
+        code.push_str("struct PatternInfo {\n");
+        code.push_str("    int pattern_id;\n");
+        code.push_str("    int priority;\n");
+        code.push_str("};\n\n");
+
+        code.push_str("static struct PatternInfo get_pattern_info(StateID state) {\n");
+        code.push_str("    struct PatternInfo info = {-1, -1};\n");
+        code.push_str("    switch(state) {\n");
+
+        let mut pattern_id = 0;
+        for state in &self.dfa.final_states {
+            code.push_str(&format!("    case {}:\n", state));
+            code.push_str(&format!("        info.pattern_id = {};\n", pattern_id));
+            code.push_str(&format!(
+                "        info.priority = {};\n",
+                self.dfa.final_states.len() - pattern_id
+            ));
+            code.push_str("        break;\n");
+            pattern_id += 1;
+        }
+
+        code.push_str("    }\n");
+        code.push_str("    return info;\n");
+        code.push_str("}\n\n");
+
+        code
+    }
+
+    fn generate_actions(&self) -> String {
+        let mut code = String::new();
+
+        code.push_str("static void execute_action(StateID state) {\n");
+        code.push_str("    switch(state) {\n");
+
+        for (state, action) in &self.dfa.actions {
+            code.push_str(&format!("    case {}:\n", state));
+            code.push_str(&format!("        {}\n", action));
+            code.push_str("        break;\n");
+        }
+
+        code.push_str("    default:\n");
+        code.push_str("        break;\n");
+        code.push_str("    }\n");
+        code.push_str("}\n\n");
+
+        code
+    }
+
     fn generate_token_logic(&self) -> String {
-        // Generate the token recognition and handling logic
         let mut logic = String::new();
 
-        // Define global variables for proper REJECT functionality
-        logic.push_str("// Global variables for REJECT and lexer state\n");
-        logic.push_str("static int yy_current_pattern_id = -1;  // Current pattern being matched\n");
-        logic.push_str("static int yy_starting_state = 0;      // DFA start state\n");
-        logic.push_str("static int yy_more_len = 0;            // Length accumulated by yymore()\n");
-        logic.push_str("static char *yy_current_token_start = NULL; // Start of current token\n");
-        logic.push_str("\n");
+        logic.push_str("// Global variables for lexer state\n");
+        logic.push_str("static int yy_current_pattern_id = -1;\n");
+        logic.push_str("static int yy_starting_state = 0;\n");
+        logic.push_str("static int yy_more_len = 0;\n");
+        logic.push_str("static char *yy_current_token_start = NULL;\n\n");
 
-        // Define data structures for tracking matched patterns
-        logic.push_str("// Maximum number of patterns that could match a token\n");
-        logic.push_str("#define MAX_MATCHES 100\n");
-        logic.push_str("\n");
-        
-        logic.push_str("// Structure to track matched patterns\n");
+        logic.push_str("#define MAX_MATCHES 100\n\n");
+
         logic.push_str("typedef struct {\n");
-        logic.push_str("    StateID state;      // The accepting state\n");
-        logic.push_str("    int pattern_id;     // Pattern ID for this match\n");
-        logic.push_str("    int priority;       // Priority of this pattern\n");
-        logic.push_str("    int length;         // Length of this match\n");
-        logic.push_str("    char *text_position; // Position in the input where match occurred\n");
-        logic.push_str("} Match;\n");
-        logic.push_str("\n");
-        
-        logic.push_str("// Array to hold all matches for the current token\n");
+        logic.push_str("    StateID state;\n");
+        logic.push_str("    int pattern_id;\n");
+        logic.push_str("    int priority;\n");
+        logic.push_str("    int length;\n");
+        logic.push_str("    char *text_position;\n");
+        logic.push_str("} Match;\n\n");
+
         logic.push_str("static Match yy_matches[MAX_MATCHES];\n");
-        logic.push_str("static int yy_match_count = 0;  // Number of patterns that matched\n");
-        logic.push_str("static int yy_match_index = 0;  // Current match being processed\n");
+        logic.push_str("static int yy_match_count = 0;\n");
+        logic.push_str("static int yy_match_index = 0;\n\n");
         logic.push_str("\n");
 
         // Define function to add a match to our collection
@@ -201,16 +221,20 @@ impl CodeGenerator {
         logic.push_str("            yy_matches[yy_match_count].state = state;\n");
         logic.push_str("            yy_matches[yy_match_count].pattern_id = info.pattern_id;\n");
         logic.push_str("            yy_matches[yy_match_count].priority = info.priority;\n");
-        logic.push_str("            yy_matches[yy_match_count].length = pos - yy_current_token_start;\n");
+        logic.push_str(
+            "            yy_matches[yy_match_count].length = pos - yy_current_token_start;\n",
+        );
         logic.push_str("            yy_matches[yy_match_count].text_position = pos;\n");
         logic.push_str("            yy_match_count++;\n");
         logic.push_str("        }\n");
         logic.push_str("    } else {\n");
-        logic.push_str("        fprintf(stderr, \"Too many matches for token, increase MAX_MATCHES\\n\");\n");
+        logic.push_str(
+            "        fprintf(stderr, \"Too many matches for token, increase MAX_MATCHES\\n\");\n",
+        );
         logic.push_str("    }\n");
         logic.push_str("}\n");
         logic.push_str("\n");
-        
+
         // Function to compare matches for sorting
         logic.push_str("// Function to compare matches for sorting by length, then priority\n");
         logic.push_str("static int compare_matches(const void *a, const void *b) {\n");
@@ -281,11 +305,15 @@ impl CodeGenerator {
 
         logic.push_str("    // If we found matches, sort them by length and priority\n");
         logic.push_str("    if (yy_match_count > 0) {\n");
-        logic.push_str("        qsort(yy_matches, yy_match_count, sizeof(Match), compare_matches);\n");
+        logic.push_str(
+            "        qsort(yy_matches, yy_match_count, sizeof(Match), compare_matches);\n",
+        );
         logic.push_str("\n");
         logic.push_str("        // Process each match in order until one is not REJECTed\n");
         logic.push_str("process_match:\n");
-        logic.push_str("        // If we've tried all matches, move to the next character and try again\n");
+        logic.push_str(
+            "        // If we've tried all matches, move to the next character and try again\n",
+        );
         logic.push_str("        if (yy_match_index >= yy_match_count) {\n");
         logic.push_str("            if (current_pos < buffer_end) {\n");
         logic.push_str("                fprintf(stderr, \"All matches REJECTed, skipping character '%c'\\n\", *current_pos);\n");
@@ -307,10 +335,14 @@ impl CodeGenerator {
         logic.push_str("\n");
         logic.push_str("        // Allocate or reallocate yytext buffer if needed\n");
         logic.push_str("        int total_len = yy_more_len + yyleng;\n");
-        logic.push_str("        if (yytext_buffer == NULL || total_len + 1 > yytext_buffer_size) {\n");
+        logic.push_str(
+            "        if (yytext_buffer == NULL || total_len + 1 > yytext_buffer_size) {\n",
+        );
         logic.push_str("            int new_size = total_len + 1;\n");
         logic.push_str("            if (yytext_buffer) {\n");
-        logic.push_str("                yytext_buffer = (char *)realloc(yytext_buffer, new_size);\n");
+        logic.push_str(
+            "                yytext_buffer = (char *)realloc(yytext_buffer, new_size);\n",
+        );
         logic.push_str("            } else {\n");
         logic.push_str("                yytext_buffer = (char *)malloc(new_size);\n");
         logic.push_str("            }\n");
@@ -333,19 +365,21 @@ impl CodeGenerator {
         logic.push_str("        yy_rejected = 0;  // Reset REJECT flag before action\n");
         logic.push_str("        execute_action(match->state);\n");
         logic.push_str("\n");
-        
+
         logic.push_str("        // If action called REJECT, try the next match\n");
         logic.push_str("        if (yy_rejected) {\n");
         logic.push_str("            yy_match_index++;\n");
         logic.push_str("            goto process_match;\n");
         logic.push_str("        }\n");
         logic.push_str("\n");
-        
+
         logic.push_str("        // Update the current position to after the matched text\n");
         logic.push_str("        current_pos = current_pos + match->length;\n");
         logic.push_str("\n");
-        
-        logic.push_str("        // Reset yymore state for next token (unless yymore() was called)\n");
+
+        logic.push_str(
+            "        // Reset yymore state for next token (unless yymore() was called)\n",
+        );
         logic.push_str("        if (!yy_more_len) {\n");
         logic.push_str("            yy_current_pattern_id = -1;\n");
         logic.push_str("        } else {\n");
@@ -353,7 +387,7 @@ impl CodeGenerator {
         logic.push_str("            // (yy_more_len is already set by yymore macro)\n");
         logic.push_str("        }\n");
         logic.push_str("\n");
-        
+
         logic.push_str("        // Scan for the next token\n");
         logic.push_str("        goto scan_token;\n");
         logic.push_str("    }\n");
@@ -370,7 +404,7 @@ impl CodeGenerator {
         );
         logic.push_str("                (unsigned char)*current_pos, yylineno, yycolumn);\n");
         logic.push_str("\n");
-        
+
         logic.push_str("        // Update line/column tracking\n");
         logic.push_str("        if (*current_pos == '\\n') {\n");
         logic.push_str("            yylineno++;\n");
@@ -379,7 +413,7 @@ impl CodeGenerator {
         logic.push_str("            yycolumn++;\n");
         logic.push_str("        }\n");
         logic.push_str("\n");
-        
+
         logic.push_str("        // Skip invalid character and continue\n");
         logic.push_str("        current_pos++;\n");
         logic.push_str("        goto scan_token;\n");
@@ -393,23 +427,11 @@ impl CodeGenerator {
         logic.push_str("        yytext = NULL;\n");
         logic.push_str("    }\n");
         logic.push_str("\n");
-        
+
         logic.push_str("    return 0; // EOF\n");
         logic.push_str("}\n");
         logic.push_str("\n");
 
         logic
-    }
-}
-
-// Helper function to get a readable description of a character
-fn char_description(ch: char) -> String {
-    match ch {
-        '\n' => String::from("\\n (newline)"),
-        '\r' => String::from("\\r (carriage return)"),
-        '\t' => String::from("\\t (tab)"),
-        ' ' => String::from("space"),
-        '\x00'..='\x1F' | '\x7F' => format!("ASCII {:?} (control)", ch as u8),
-        _ => format!("'{}'", ch),
     }
 }

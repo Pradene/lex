@@ -1,5 +1,5 @@
 %{
-  #include <stdio.h>
+#include <stdio.h>
 %}
 
 DIGIT       [0-9]
@@ -47,8 +47,6 @@ COMMENT     \/\/.*
 ";"         { printf("SEMICOLON\n"); }
 ","         { printf("COMMA\n"); }
 
-"\n"        printf("NEWLINE\n");
-"\t"        printf("TAB\n");
-[[:blank:]] { /* ignore whitespaces */ }
+[[:space:]] { /* ignore whitespaces */ }
 .           { printf("UNRECOGNIZED: %s\n", yytext); }
 
