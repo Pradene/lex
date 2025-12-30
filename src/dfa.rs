@@ -81,13 +81,13 @@ impl From<NFA> for DFA {
                 for &nfa_state in &current_nfa_states {
                     if let Some(targets) = nfa
                         .transitions
-                        .get(&(nfa_state, TransitionSymbol::Char(symbol)))
+                        .get(&(nfa_state, TransitionSymbol::Literal(symbol)))
                     {
                         next_nfa_states.extend(targets);
                     }
                     for ((src, sym), targets) in &nfa.transitions {
                         if *src == nfa_state {
-                            if let TransitionSymbol::CharClass(char_set) = sym {
+                            if let TransitionSymbol::Set(char_set) = sym {
                                 if char_set.contains(&symbol) {
                                     next_nfa_states.extend(targets);
                                 }

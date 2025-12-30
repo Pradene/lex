@@ -114,15 +114,15 @@ impl NFA {
 
         match symbol {
             TransitionSymbol::Epsilon => {}
-            TransitionSymbol::Char(c) => {
+            TransitionSymbol::Literal(c) => {
                 self.alphabet.insert(c);
             }
-            TransitionSymbol::CharClass(class) => {
+            TransitionSymbol::Set(class) => {
                 for &c in &class {
                     self.alphabet.insert(c);
                 }
             }
-            TransitionSymbol::NegatedCharClass(class) => {
+            TransitionSymbol::NegatedSet(class) => {
                 for i in 0..256 {
                     match char::from_u32(i) {
                         Some(c) => {
@@ -156,7 +156,7 @@ impl NFA {
 
         nfa.start_state = start;
         nfa.final_states.insert(end);
-        nfa.add_transition(start, TransitionSymbol::Char(c), end);
+        nfa.add_transition(start, TransitionSymbol::Literal(c), end);
 
         nfa
     }
@@ -168,7 +168,7 @@ impl NFA {
 
         nfa.start_state = start;
         nfa.final_states.insert(end);
-        nfa.add_transition(start, TransitionSymbol::CharClass(chars), end);
+        nfa.add_transition(start, TransitionSymbol::Set(chars), end);
 
         nfa
     }
