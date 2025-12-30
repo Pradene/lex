@@ -1,4 +1,4 @@
-pub mod args;
+pub mod app;
 pub mod code;
 pub mod dfa;
 pub mod file;
@@ -6,7 +6,7 @@ pub mod nfa;
 pub mod regex;
 pub mod transition;
 
-pub use args::*;
+pub use app::*;
 pub use code::*;
 pub use dfa::*;
 pub use file::*;
