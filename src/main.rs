@@ -17,11 +17,11 @@ fn main() -> Result<(), String> {
     let args = app.parse_args();
 
     let mut output: Box<dyn Write> = if args.contains("t") {
+        Box::new(stdout())
+    } else {
         let filename = "lex.yy.c";
         let file = File::create(filename).map_err(|e| format!("{e}"))?;
         Box::new(file)
-    } else {
-        Box::new(stdout())
     };
 
     let input = args
