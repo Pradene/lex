@@ -14,10 +14,10 @@ impl CodeGenerator {
         let mut code = String::new();
 
         code.push_str(&self.generate_header());
-        code.push_str(&self.generate_transition_table()); // REPLACE OLD METHOD
-        code.push_str(&self.generate_accepting_states()); // NEW: separate concern
-        code.push_str(&self.generate_pattern_info()); // NEW: separate concern
-        code.push_str(&self.generate_actions()); // NEW: separate concern
+        code.push_str(&self.generate_transition_table());
+        code.push_str(&self.generate_accepting_states());
+        code.push_str(&self.generate_pattern_info());
+        code.push_str(&self.generate_actions());
         code.push_str(&self.generate_token_logic());
         code.push_str(&self.file.code);
 
@@ -27,7 +27,6 @@ impl CodeGenerator {
     fn generate_header(&self) -> String {
         let mut header = String::new();
 
-        println!("{:?}", self.file.definitions_code);
         for line in &self.file.definitions_code {
             header.push_str(line);
             header.push_str("\n");
