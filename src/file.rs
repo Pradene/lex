@@ -8,23 +8,21 @@ pub enum LexSection {
     Code,
 }
 
-type Definitions = BTreeMap<String, String>;
-
-pub struct Rule {
+pub struct LexRule {
     pub pattern: String,
     pub nfa: NFA,
     pub action: String,
 }
 
-pub struct PendingPattern {
+pub struct PatternDeclaration {
     pub pattern: String,
     pub line_number: usize,
 }
 
 pub struct LexFile {
     pub definitions_code: Vec<String>,
-    pub definitions: Definitions,
-    pub rules: Vec<Rule>,
+    pub definitions: BTreeMap<String, String>,
+    pub rules: Vec<LexRule>,
     pub code: String,
 }
 
@@ -68,10 +66,10 @@ struct LexParser<'a> {
     path: &'a str,
     lines: Vec<&'a str>,
     definitions_code: Vec<String>,
-    definitions: Definitions,
-    rules: Vec<Rule>,
+    definitions: BTreeMap<String, String>,
+    rules: Vec<LexRule>,
     code: String,
-    pending_patterns: Vec<PendingPattern>,
+    pending_patterns: Vec<PatternDeclaration>,
     current_section: LexSection,
     line_index: usize,
 }
@@ -187,7 +185,7 @@ impl<'a> LexParser<'a> {
         line_number: usize,
     ) -> Result<(), String> {
         if action == "|" {
-            self.pending_patterns.push(PendingPattern {
+            self.pending_patterns.push(PatternDeclaration {
                 pattern,
                 line_number,
             });
@@ -210,7 +208,7 @@ impl<'a> LexParser<'a> {
         let mut brace_count = action.chars().filter(|c| *c == '{').count() as i32;
         brace_count -= action.chars().filter(|c| *c == '}').count() as i32;
 
-        self.pending_patterns.push(PendingPattern {
+        self.pending_patterns.push(PatternDeclaration {
             pattern,
             line_number,
         });
@@ -239,7 +237,8 @@ impl<'a> LexParser<'a> {
 
     fn commit_pending_rules(&mut self, action: String) -> Result<(), String> {
         for pending in self.pending_patterns.drain(..) {
-            self.rules.push(Rule::new(pending.pattern, action.clone())?);
+            self.rules
+                .push(LexRule::new(pending.pattern, action.clone())?);
         }
         Ok(())
     }
@@ -253,7 +252,7 @@ impl<'a> LexParser<'a> {
         if !self.pending_patterns.is_empty() {
             self.commit_pending_rules(action.clone())?;
         }
-        self.rules.push(Rule::new(pattern, action)?);
+        self.rules.push(LexRule::new(pattern, action)?);
         Ok(())
     }
 
@@ -366,11 +365,11 @@ impl PatternParser {
     }
 }
 
-impl Rule {
-    pub fn new(pattern: String, action: String) -> Result<Rule, String> {
+impl LexRule {
+    pub fn new(pattern: String, action: String) -> Result<LexRule, String> {
         let nfa = NFA::new(&pattern)
             .map_err(|e| format!("Invalid regex pattern '{}': {}", pattern, e))?;
-        Ok(Rule {
+        Ok(LexRule {
             pattern,
             nfa,
             action,

@@ -137,7 +137,7 @@ impl From<NFA> for DFA {
             }
         }
 
-        dfa.minimize()
+        dfa
     }
 }
 

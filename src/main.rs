@@ -9,12 +9,12 @@ use lex::{
 
 fn main() -> Result<(), String> {
     let opts = vec![
-        Opt::new("t").help("Redirect stdout to a file".to_string()),
-        Opt::new("f").help("Minimize transition table".to_string()),
+        Opt::new("t".to_string()).help("Redirect stdout to a file".to_string()),
+        Opt::new("f".to_string()).help("Minimize transition table".to_string()),
     ];
 
     let app = App::new(opts);
-    let args = app.parse();
+    let args = app.parse_args();
 
     let mut output: Box<dyn Write> = if args.contains("t") {
         let filename = "lex.yy.c";
@@ -27,12 +27,18 @@ fn main() -> Result<(), String> {
     let input = args
         .positional
         .first()
-        .ok_or("./lex [options] input_file")?;
+        .ok_or(format!("Usage: {} [options] file", args.executable))?;
 
     let file = LexFile::new(input)?;
-    let dfa = file.dfa()?;
+    let dfa = if args.contains("f") {
+        file.dfa()?
+    } else {
+        file.dfa()?.minimize()
+    };
+
     let generator = CodeGenerator::new(file, dfa);
     let code = generator.code();
+
     writeln!(output, "{}", code).map_err(|e| format!("{}", e))?;
     Ok(())
 }
